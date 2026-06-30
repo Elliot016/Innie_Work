@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   // Makes "Add to Home Screen" launch fullscreen like a native app.
   appleWebApp: {
     capable: true,
-    title: "Innie Duties",
+    title: "Innie Work",
     statusBarStyle: "black-translucent",
   },
 };
