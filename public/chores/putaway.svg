@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+  <rect width="1000" height="1000" fill="white"/>
+
+  <!-- Left flap (behind box body) -->
+  <path d="M 230,490 L 500,490 L 435,215 L 80,200 Z"
+    fill="white" stroke="#111" stroke-width="26" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Right flap (behind box body) -->
+  <path d="M 500,490 L 770,490 L 920,200 L 565,215 Z"
+    fill="white" stroke="#111" stroke-width="26" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Box body (front face, drawn after flaps so it sits on top) -->
+  <path d="M 230,490 L 770,490 L 770,825 L 230,825 Z"
+    fill="white" stroke="#111" stroke-width="26" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Vertical center seam -->
+  <line x1="500" y1="490" x2="500" y2="825" stroke="#111" stroke-width="18"/>
+
+  <!-- Horizontal crease -->
+  <line x1="230" y1="657" x2="770" y2="657" stroke="#111" stroke-width="18"/>
+
+  <!-- Flap hinge lines (left and right sides of box going up to flap corners) -->
+  <line x1="230" y1="490" x2="80" y2="200" stroke="#111" stroke-width="18"/>
+  <line x1="770" y1="490" x2="920" y2="200" stroke="#111" stroke-width="18"/>
+
+  <!-- Flap center seam (where two flaps meet) -->
+  <line x1="500" y1="490" x2="500" y2="215" stroke="#111" stroke-width="14" stroke-dasharray="28 18"/>
+</svg>
