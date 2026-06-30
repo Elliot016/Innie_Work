@@ -417,7 +417,6 @@ export default function Home() {
         <div className="app-header">
           <div className="header-top">
             <div>
-              <div className="logo-eyebrow">Lumon Home Division</div>
               <div className="logo-name">Your Innie <span>Duties</span></div>
             </div>
             <div className="header-right">
@@ -439,7 +438,7 @@ export default function Home() {
         <div className="legend">
           <span><span className="leg-dot" style={{ background: "var(--elliot-light)" }} />Elliot</span>
           <span><span className="leg-dot" style={{ background: "var(--paisley-light)" }} />Paisley</span>
-          <button className="nav-btn" onClick={() => setPage(1)}>Overview →</button>
+          <button className="nav-btn" onClick={() => setPage(1)} style={{ marginLeft: "auto" }}>Overview →</button>
         </div>
 
         <div className="board-grid">
@@ -568,7 +567,6 @@ export default function Home() {
         <div className="ov-header">
           <div className="header-top">
             <div>
-              <div className="logo-eyebrow">Lumon Home Division</div>
               <div className="ov-title">Overview</div>
             </div>
             <div className="header-right">
