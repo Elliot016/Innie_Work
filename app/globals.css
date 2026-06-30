@@ -85,8 +85,9 @@ body {
 .nav-btn:active { color: var(--text); }
 
 /* ── SHARED HEADER ── */
+/* Top padding clears the iOS status bar (safe-area) plus extra breathing room. */
 .app-header {
-  padding: 28px 20px 14px;
+  padding: calc(env(safe-area-inset-top, 0px) + 40px) 20px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   position: sticky;
@@ -328,7 +329,7 @@ body {
 
 /* ── OVERVIEW PAGE ── */
 .ov-header {
-  padding: 28px 20px 14px;
+  padding: calc(env(safe-area-inset-top, 0px) + 40px) 20px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   position: sticky; top: 0; z-index: 30;
@@ -425,7 +426,7 @@ body {
   .board-grid {
     grid-template-columns: repeat(5, 1fr);
     gap: 12px;
-    padding: 16px 16px 0;
+    padding: 28px 16px 0;
   }
 
   .task-card {
@@ -433,11 +434,11 @@ body {
   }
 
   .app-header {
-    padding: 22px 24px 14px;
+    padding: calc(env(safe-area-inset-top, 0px) + 34px) 24px 16px;
   }
 
   .ov-header {
-    padding: 22px 24px 14px;
+    padding: calc(env(safe-area-inset-top, 0px) + 34px) 24px 16px;
   }
 
   .legend {
