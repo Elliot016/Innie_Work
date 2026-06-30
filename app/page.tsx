@@ -555,7 +555,7 @@ export default function Home() {
         {allDone && (
           <div className="done-banner">
             <div className="done-banner-title">The work is complete.</div>
-            <div className="done-banner-sub">&ldquo;You may return to the elevator.&rdquo;</div>
+            <div className="done-banner-sub">&ldquo;Your Outties are very happy with your performance.&rdquo;</div>
           </div>
         )}
 
