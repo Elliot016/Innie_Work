@@ -12,7 +12,7 @@
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "vercel": "^54.18.5"
+    "vercel": "^54.20.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
