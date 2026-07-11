@@ -307,6 +307,19 @@ body {
 .log-btn.e-btn.selected { background: var(--elliot); border-color: var(--elliot); color: white; }
 .log-btn.p-btn.selected { background: var(--paisley); border-color: var(--paisley); color: white; }
 .log-btn:not(.selected):hover { border-color: rgba(255,255,255,0.3); color: var(--text); }
+.log-btn:disabled { opacity: 0.35; cursor: default; }
+.log-btn:disabled:hover { border-color: var(--border); color: var(--sub); }
+
+/* SUB-TASK PANEL (chores where every part must be ticked, e.g. both dogs) */
+.log-panel.parts-panel.open { flex-direction: column; }
+.log-row { display: flex; gap: 7px; }
+.log-btn.part-btn.selected { background: var(--green); border-color: var(--green); color: white; }
+
+.parts-hint {
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 0.55rem; color: var(--sub); text-align: center;
+  letter-spacing: 0.05em; padding-top: 1px;
+}
 
 /* DONE BANNER */
 .done-banner {
@@ -384,6 +397,24 @@ body {
   display: flex; align-items: center; gap: 10px;
 }
 .ov-section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* MONTH PICKER (past months on the Overview) */
+.month-nav { display: flex; align-items: center; gap: 6px; }
+
+.month-nav-label { color: var(--text); letter-spacing: 0.1em; }
+
+.month-nav-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.72rem; line-height: 1;
+  padding: 3px 7px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.month-nav-btn:active { background: var(--surface); }
+.month-nav-btn:disabled { opacity: 0.25; cursor: default; }
 
 .ov-table {
   margin: 0 14px;

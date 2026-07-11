@@ -22,6 +22,9 @@ interface ChoreDef {
   yellowMax: number;
   defaultDaysAgo: number;
   freq?: string;
+  // Sub-tasks that must ALL be ticked before the chore counts as done — e.g. the
+  // dog walk isn't finished until both dogs have been walked.
+  parts?: string[];
 }
 
 interface ChoreState {
@@ -33,6 +36,7 @@ interface ChoreState {
   lastDoneDate: string | null;
   daysAgo: number;
   expanded: boolean;
+  partsDone: boolean[];
 }
 
 interface PersistedChore {
@@ -41,6 +45,7 @@ interface PersistedChore {
   pDone: boolean;
   lastDoneDate: string | null;
   lastWho: string | null;
+  partsDone?: boolean[];
 }
 
 interface PersistedData {
@@ -53,6 +58,10 @@ interface PersistedData {
 const STORAGE_KEY = "inniework";
 const WEEKLY_KEY = "inniework_weekly";
 const MONTHLY_KEY = "inniework_monthly";
+const HISTORY_KEY = "inniework_history";
+
+// How many finished months to keep on the device.
+const MAX_HISTORY = 36;
 
 // Bumping this string forces a one-time clean slate on every device the next
 // time the app loads (fresh week starting Mon 2026-06-29).
@@ -64,12 +73,14 @@ const CHORE_DEFS: ChoreDef[] = [
   { id: "putaway",     name: "Put Stuff Away", image: "/chores/putaway.svg",     type: "both",   cycleDays: 1,  greenMax: 1,  yellowMax: 1,  defaultDaysAgo: 0 },
   { id: "poop",        name: "Pick Up Poop",   image: "/chores/poop.png",        type: "single", cycleDays: 4,  greenMax: 2,  yellowMax: 3,  defaultDaysAgo: 1, freq: "Every 4 days" },
   { id: "plants",      name: "Water Outdoor Plants",   image: "/chores/plants.png",      type: "single", cycleDays: 3,  greenMax: 1,  yellowMax: 2,  defaultDaysAgo: 1, freq: "Every 3 days" },
-  { id: "plants_in",   name: "Water Indoor Plants",  image: "/chores/plants.png",      type: "single", cycleDays: 14, greenMax: 7,  yellowMax: 11, defaultDaysAgo: 1, freq: "Every 2 weeks" },
+  { id: "plants_in",   name: "Water Indoor Plants",  image: "/chores/plants.png",      type: "single", cycleDays: 14, greenMax: 9,  yellowMax: 11, defaultDaysAgo: 1, freq: "Every 2 weeks" },
   { id: "countertops", name: "Countertops",    image: "/chores/countertops.svg", type: "single", cycleDays: 7,  greenMax: 5,  yellowMax: 6,  defaultDaysAgo: 1, freq: "Weekly" },
   { id: "vacuum",      name: "Vacuuming",      image: "/chores/vacuum.png",      type: "single", cycleDays: 7,  greenMax: 5,  yellowMax: 6,  defaultDaysAgo: 1, freq: "Weekly" },
   { id: "sheets",      name: "Bed Sheets",     image: "/chores/sheets.png",      type: "single", cycleDays: 7,  greenMax: 5,  yellowMax: 6,  defaultDaysAgo: 1, freq: "Weekly" },
-  { id: "toilets",     name: "Toilets",        image: "/chores/toilets.png",     type: "single", cycleDays: 14, greenMax: 7,  yellowMax: 11, defaultDaysAgo: 1, freq: "Twice a month" },
+  { id: "toilets",     name: "Toilets",        image: "/chores/toilets.png",     type: "single", cycleDays: 14, greenMax: 9,  yellowMax: 11, defaultDaysAgo: 1, freq: "Twice a month" },
+  { id: "dogtrain",    name: "Dog Training",   image: "/chores/Doggy.png",       type: "single", cycleDays: 14, greenMax: 9,  yellowMax: 11, defaultDaysAgo: 1, freq: "Twice a month · 5 min" },
   { id: "mopping",     name: "Mopping",        image: "/chores/mopping.svg",     type: "single", cycleDays: 30, greenMax: 21, yellowMax: 25, defaultDaysAgo: 1, freq: "Monthly" },
+  { id: "dogwalk",     name: "Walk the Dogs",  image: "/chores/walking.png",     type: "single", cycleDays: 30, greenMax: 24, yellowMax: 28, defaultDaysAgo: 1, freq: "Monthly", parts: ["Koa", "Panko"] },
 ];
 
 // Real, accumulated tallies — count each chore logged in the period, per person.
@@ -103,6 +114,28 @@ function emptyPeriod(period: string): PeriodLog {
   return { period, elliot: {}, paisley: {} };
 }
 
+function periodTotal(p: PeriodLog): number {
+  const sumRec = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
+  return sumRec(p.elliot) + sumRec(p.paisley);
+}
+
+// Move a finished month into the archive, newest first. Empty months aren't
+// worth keeping, and a re-archived month replaces its earlier copy.
+function archiveMonth(done: PeriodLog, history: PeriodLog[]): PeriodLog[] {
+  if (periodTotal(done) === 0) return history;
+  return [done, ...history.filter((h) => h.period !== done.period)]
+    .sort((a, b) => b.period.localeCompare(a.period))
+    .slice(0, MAX_HISTORY);
+}
+
+// "2026-06" → "JUNE 2026"
+function monthLabelOf(period: string): string {
+  const [y, m] = period.split("-").map(Number);
+  return new Date(y, m - 1, 1)
+    .toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    .toUpperCase();
+}
+
 function computeDaysAgo(lastDoneDate: string | null): number {
   if (!lastDoneDate) return 999;
   const [y, m, day] = lastDoneDate.split("-").map(Number);
@@ -133,6 +166,7 @@ function buildChores(saved?: PersistedData | null): ChoreState[] {
         eDone: sameDay ? (sc?.eDone ?? false) : false,
         pDone: sameDay ? (sc?.pDone ?? false) : false,
         done: false, lastWho: null, lastDoneDate: null, daysAgo: 0,
+        partsDone: [],
       };
     }
     // Recurring chores age by days-since-last-done. With no saved record, seed
@@ -146,8 +180,14 @@ function buildChores(saved?: PersistedData | null): ChoreState[] {
       lastWho: sc?.lastWho ?? null,
       lastDoneDate,
       daysAgo,
+      // Part ticks persist across days — walk one dog today, the other tomorrow.
+      partsDone: (def.parts ?? []).map((_, i) => sc?.partsDone?.[i] ?? false),
     };
   });
+}
+
+function allPartsDone(c: ChoreState): boolean {
+  return c.partsDone.every(Boolean);
 }
 
 function getUrgency(c: ChoreState): Urgency {
@@ -215,6 +255,8 @@ export default function Home() {
   const [chores, setChores] = useState<ChoreState[]>(() => buildChores());
   const [weekly, setWeekly] = useState<PeriodLog>(() => emptyPeriod(weekStartStr()));
   const [monthly, setMonthly] = useState<PeriodLog>(() => emptyPeriod(monthStr()));
+  const [history, setHistory] = useState<PeriodLog[]>([]);
+  const [viewMonth, setViewMonth] = useState<string>(() => monthStr());
   const [page, setPage] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [dayKey, setDayKey] = useState(() => todayStr());
@@ -239,6 +281,13 @@ export default function Home() {
       }
     } catch {}
 
+    // Past months survive a reset-tag clean slate — that's the point of them.
+    let past: PeriodLog[] = [];
+    try {
+      const rawH = localStorage.getItem(HISTORY_KEY);
+      if (rawH) past = JSON.parse(rawH) as PeriodLog[];
+    } catch {}
+
     if (!fresh) {
       try {
         const rawW = localStorage.getItem(WEEKLY_KEY);
@@ -252,11 +301,18 @@ export default function Home() {
         const rawM = localStorage.getItem(MONTHLY_KEY);
         if (rawM) {
           const saved = JSON.parse(rawM) as PeriodLog;
-          // New calendar month → start the monthly tally fresh.
-          setMonthly(saved.period === monthStr() ? saved : emptyPeriod(monthStr()));
+          if (saved.period === monthStr()) {
+            setMonthly(saved);
+          } else {
+            // Months turned over while the app was closed: file the finished
+            // one away instead of dropping it, and start this month at zero.
+            past = archiveMonth(saved, past);
+          }
         }
       } catch {}
     }
+
+    setHistory(past);
     setLoaded(true);
   }, []);
 
@@ -268,6 +324,10 @@ export default function Home() {
     }, 60000);
     return () => clearInterval(id);
   }, []);
+
+  // Latest monthly tally, readable from the rollover effect without re-running it.
+  const monthlyRef = useRef(monthly);
+  useEffect(() => { monthlyRef.current = monthly; }, [monthly]);
 
   // When the day changes while the app is open, roll everything over live:
   // clear the daily checkboxes, re-age every recurring chore's day counter, and
@@ -285,7 +345,14 @@ export default function Home() {
       })
     );
     setWeekly((prev) => (prev.period === weekStartStr() ? prev : emptyPeriod(weekStartStr())));
-    setMonthly((prev) => (prev.period === monthStr() ? prev : emptyPeriod(monthStr())));
+    const m = monthStr();
+    const finished = monthlyRef.current;
+    if (finished.period !== m) {
+      // New calendar month: archive the finished one, then start fresh.
+      setHistory((prev) => archiveMonth(finished, prev));
+      setMonthly(emptyPeriod(m));
+      setViewMonth((prev) => (prev === finished.period ? prev : m));
+    }
   }, [dayKey, loaded]);
 
   // Persist the weekly tally on change (after initial load)
@@ -300,6 +367,12 @@ export default function Home() {
     localStorage.setItem(MONTHLY_KEY, JSON.stringify(monthly));
   }, [monthly, loaded]);
 
+  // Persist the archive of finished months on change (after initial load)
+  useEffect(() => {
+    if (!loaded) return;
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  }, [history, loaded]);
+
   // Persist on change (after initial load)
   useEffect(() => {
     if (!loaded) return;
@@ -312,6 +385,7 @@ export default function Home() {
         pDone: c.pDone,
         lastDoneDate: c.lastDoneDate,
         lastWho: c.lastWho,
+        partsDone: c.partsDone,
       })),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -336,7 +410,13 @@ export default function Home() {
       return { ...base, [key]: { ...base[key], [choreId]: next } };
     };
     setWeekly((prev) => apply(prev.period === weekStartStr() ? prev : emptyPeriod(weekStartStr())));
-    setMonthly((prev) => apply(prev.period === monthStr() ? prev : emptyPeriod(monthStr())));
+    setMonthly((prev) => {
+      if (prev.period === monthStr()) return apply(prev);
+      // Month turned over between the last render and this tap — archive it
+      // rather than let the fresh tally overwrite it.
+      setHistory((h) => archiveMonth(prev, h));
+      return apply(emptyPeriod(monthStr()));
+    });
   }
 
   function logBoth(i: number, who: Who) {
@@ -355,15 +435,37 @@ export default function Home() {
     );
   }
 
+  // Tick one sub-task (e.g. one dog) on or off. Doesn't complete the chore —
+  // that still takes a person logging it once every part is ticked.
+  function togglePart(i: number, part: number) {
+    setChores((prev) =>
+      prev.map((cc, idx) => {
+        if (idx !== i) return cc;
+        return { ...cc, partsDone: cc.partsDone.map((d, j) => (j === part ? !d : d)) };
+      })
+    );
+  }
+
   function logSingle(i: number, who: Who) {
     const c = chores[i];
     if (!c) return;
+    // A chore with sub-tasks isn't done until every one of them is ticked.
+    if (!allPartsDone(c)) return;
     const today = todayStr();
     bump(c.def.id, who, 1);
     setChores((prev) =>
       prev.map((cc, idx) => {
         if (idx !== i) return cc;
-        return { ...cc, done: true, lastWho: who === "e" ? "Elliot" : "Paisley", lastDoneDate: today, daysAgo: 0, expanded: false };
+        return {
+          ...cc,
+          done: true,
+          lastWho: who === "e" ? "Elliot" : "Paisley",
+          lastDoneDate: today,
+          daysAgo: 0,
+          expanded: false,
+          // Cycle restarts, so the parts start over too.
+          partsDone: cc.partsDone.map(() => false),
+        };
       })
     );
   }
@@ -382,9 +484,21 @@ export default function Home() {
   const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
   const eWeek = sum(weekly.elliot);
   const pWeek = sum(weekly.paisley);
-  const eTotal = sum(monthly.elliot);
-  const pTotal = sum(monthly.paisley);
-  const monthLabel = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
+  // Months you can page through on the Overview: this one, plus the archive.
+  const thisMonth = monthStr();
+  const monthOptions = [thisMonth, ...history.map((h) => h.period).filter((p) => p !== thisMonth)]
+    .sort()
+    .reverse();
+  const shownMonth = monthOptions.includes(viewMonth) ? viewMonth : thisMonth;
+  const monthIdx = monthOptions.indexOf(shownMonth);
+  const isThisMonth = shownMonth === thisMonth;
+  const shownLog = isThisMonth
+    ? monthly
+    : history.find((h) => h.period === shownMonth) ?? emptyPeriod(shownMonth);
+
+  const eTotal = sum(shownLog.elliot);
+  const pTotal = sum(shownLog.paisley);
+  const monthLabel = monthLabelOf(shownMonth);
   const weekLabel = `WEEK OF ${new Date(weekStartStr() + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()}`;
 
   // ── Swipe (native listeners so Safari doesn't suppress them)
@@ -518,11 +632,49 @@ export default function Home() {
                         ? c.lastWho === "Elliot" ? "var(--elliot-light)" : "var(--paisley-light)"
                         : "var(--sub)"
                     }}>
-                      {c.done ? (c.lastWho ?? "✓") : "—"}
+                      {c.done
+                        ? (c.lastWho ?? "✓")
+                        : c.def.parts
+                          ? c.def.parts.map((part, j) => (
+                              <div key={part} style={{ color: c.partsDone[j] ? "var(--green)" : "var(--sub)" }}>
+                                {part} {c.partsDone[j] ? "✓" : "—"}
+                              </div>
+                            ))
+                          : "—"}
                     </div>
                   </div>
                 </div>
-                {!c.done && (
+                {!c.done && c.def.parts && (
+                  <div className={`log-panel parts-panel ${c.expanded ? "open" : ""}`}>
+                    <div className="log-row">
+                      {c.def.parts.map((part, j) => (
+                        <button
+                          key={part}
+                          className={`log-btn part-btn ${c.partsDone[j] ? "selected" : ""}`}
+                          onClick={(e) => { e.stopPropagation(); togglePart(i, j); }}
+                        >
+                          {c.partsDone[j] ? `✓ ${part}` : `+ ${part}`}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="log-row">
+                      <button
+                        className="log-btn e-btn"
+                        disabled={!allPartsDone(c)}
+                        onClick={(e) => { e.stopPropagation(); logSingle(i, "e"); }}
+                      >+ Elliot</button>
+                      <button
+                        className="log-btn p-btn"
+                        disabled={!allPartsDone(c)}
+                        onClick={(e) => { e.stopPropagation(); logSingle(i, "p"); }}
+                      >+ Paisley</button>
+                    </div>
+                    {!allPartsDone(c) && (
+                      <div className="parts-hint">Walk {c.def.parts.join(" and ")} to log it</div>
+                    )}
+                  </div>
+                )}
+                {!c.done && !c.def.parts && (
                   <div className={`log-panel ${c.expanded ? "open" : ""}`}>
                     <button
                       className="log-btn e-btn"
@@ -598,7 +750,25 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="ov-section-label">This month · {monthLabel}</div>
+            <div className="ov-section-label">
+              {isThisMonth ? "This month" : "Past month"}
+              <span className="month-nav">
+                {/* Options run newest → oldest, so "older" walks the index up. */}
+                <button
+                  className="month-nav-btn"
+                  onClick={() => setViewMonth(monthOptions[monthIdx + 1])}
+                  disabled={monthIdx >= monthOptions.length - 1}
+                  aria-label="Older month"
+                >‹</button>
+                <span className="month-nav-label">{monthLabel}</span>
+                <button
+                  className="month-nav-btn"
+                  onClick={() => setViewMonth(monthOptions[monthIdx - 1])}
+                  disabled={monthIdx <= 0}
+                  aria-label="Newer month"
+                >›</button>
+              </span>
+            </div>
             <div className="ov-scorecards">
               <div className="scorecard" style={{ borderColor: "var(--elliot)" }}>
                 <div className="sc-name" style={{ color: "var(--elliot-light)" }}>Elliot</div>
@@ -614,11 +784,11 @@ export default function Home() {
           </div>
 
           <div className="ov-col-right">
-            <div className="ov-section-label">By chore · this month</div>
+            <div className="ov-section-label">By chore · {isThisMonth ? "this month" : monthLabel}</div>
             <div className="ov-table">
               {CHORE_DEFS.map((def) => {
-                const e = monthly.elliot[def.id] ?? 0;
-                const p = monthly.paisley[def.id] ?? 0;
+                const e = shownLog.elliot[def.id] ?? 0;
+                const p = shownLog.paisley[def.id] ?? 0;
                 const max = Math.max(e, p, 1);
                 return (
                   <div key={def.id} className="ov-row">
