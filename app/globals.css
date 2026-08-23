@@ -874,5 +874,9 @@ body {
   width: fit-content;      /* so margin-left:auto right-aligns in block context */
   margin-left: auto;
 }
-.page-nav .nav-btn { padding: 4px 0; }
+.page-nav .nav-btn { padding: 4px 0; white-space: nowrap; }
+/* Fixed-width slots keep the dots from shifting between pages */
+.nav-slot { display: inline-flex; min-width: 82px; }
+.nav-slot.prev { justify-content: flex-end; }
+.nav-slot.next { justify-content: flex-start; }
 .ov-header .page-nav { margin-top: 2px; }

@@ -519,18 +519,26 @@ export default function Home() {
     };
   }, []);
 
-  // The same nav strip on every page, always on the right: dots, then links
-  // to the pages you're not on, with Manage last.
+  // The same nav strip on every page, always on the right: previous page on
+  // the left, dots in the middle, next page on the right.
+  const PAGE_NAMES = ["Board", "Overview", "Settings"];
   const pageNav = (
     <span className="page-nav">
+      <span className="nav-slot prev">
+        {page > 0 && (
+          <button className="nav-btn" onClick={() => setPage(page - 1)}>← {PAGE_NAMES[page - 1]}</button>
+        )}
+      </span>
       <span className="page-dots">
         {[0, 1, 2].map((n) => (
           <span key={n} className={`dot ${page === n ? "active" : ""}`} onClick={() => setPage(n)} style={{ cursor: "pointer" }} />
         ))}
       </span>
-      {page !== 0 && <button className="nav-btn" onClick={() => setPage(0)}>← Board</button>}
-      {page !== 1 && <button className="nav-btn" onClick={() => setPage(1)}>Overview →</button>}
-      {page !== 2 && <button className="nav-btn" onClick={() => setPage(2)} aria-label="Manage">⚙</button>}
+      <span className="nav-slot next">
+        {page < 2 && (
+          <button className="nav-btn" onClick={() => setPage(page + 1)}>{PAGE_NAMES[page + 1]} →</button>
+        )}
+      </span>
     </span>
   );
 
@@ -785,7 +793,7 @@ export default function Home() {
         <div className="ov-header">
           <div className="header-top">
             <div>
-              <div className="ov-title">Manage</div>
+              <div className="ov-title">Settings</div>
             </div>
             <div className="header-right">
               <div className="ov-subtitle">HOUSEHOLD CONFIG</div>
