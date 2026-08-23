@@ -275,6 +275,21 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
   const [open, setOpen] = useState<string | null>(null);
   const toggle = (id: string) => setOpen((prev) => (prev === id ? null : id));
 
+  // Top-level sections start collapsed so the page reads as a small menu.
+  const [openSecs, setOpenSecs] = useState<Set<string>>(() => new Set());
+  const toggleSec = (id: string) =>
+    setOpenSecs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  const secHead = (id: string, title: string, hint: string) => (
+    <button className="set-sec-head" onClick={() => toggleSec(id)}>
+      <span className="set-title">{title}</span>
+      <span className="set-row-hint">{hint} · {openSecs.has(id) ? "CLOSE" : "OPEN"}</span>
+    </button>
+  );
+
   const addPerson = () =>
     onUpdate((cfg) => {
       const id = newId("p");
@@ -327,7 +342,8 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
   return (
     <div className="settings-body">
       <div className="set-section">
-        <div className="set-title">People</div>
+        {secHead("people", "People", String(config.people.length))}
+        {openSecs.has("people") && (<>
         {config.people.map((p) => (
           <div key={p.id} className="set-row-wrap">
             <button className="set-row" onClick={() => toggle(p.id)}>
@@ -340,10 +356,12 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
           </div>
         ))}
         <button className="set-row add" onClick={addPerson}>[ + ADD PERSON ]</button>
+        </>)}
       </div>
 
       <div className="set-section">
-        <div className="set-title">Bins</div>
+        {secHead("bins", "Bins", String(config.bins.length))}
+        {openSecs.has("bins") && (<>
         {[...config.bins].sort((a, b) => a.order - b.order).map((b) => (
           <div key={b.id} className="set-row-wrap">
             <button className="set-row" onClick={() => toggle(b.id)}>
@@ -356,10 +374,12 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
           </div>
         ))}
         <button className="set-row add" onClick={addBin}>[ + ADD BIN ]</button>
+        </>)}
       </div>
 
       <div className="set-section">
-        <div className="set-title">Chores</div>
+        {secHead("chores", "Chores", String(config.chores.length))}
+        {openSecs.has("chores") && (<>
         {[...config.chores].sort((a, b) => a.order - b.order).map((c) => (
           <div key={c.id} className="set-row-wrap">
             <button className="set-row" onClick={() => toggle(c.id)}>
@@ -370,10 +390,12 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
           </div>
         ))}
         <button className="set-row add" onClick={addChore}>[ + ADD CHORE ]</button>
+        </>)}
       </div>
 
       <div className="set-section">
-        <div className="set-title">Messages</div>
+        {secHead("messages", "Messages", "100%")}
+        {openSecs.has("messages") && (
         <div className="set-form" style={{ paddingTop: 6 }}>
           <label className="set-label">100% title
             <input
@@ -394,6 +416,7 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
             />
           </label>
         </div>
+        )}
       </div>
     </div>
   );

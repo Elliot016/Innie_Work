@@ -854,3 +854,16 @@ body {
   width: auto;
   filter: invert(1) drop-shadow(0 0 4px rgba(180, 220, 255, 0.45));
 }
+
+/* Collapsible section headers on the Manage page */
+.set-sec-head {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: none; border: none;
+  padding: 2px 2px 4px;
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.set-sec-head .set-title { margin-bottom: 0; }
+.set-sec-head:active .set-title { text-shadow: 0 0 10px rgba(180, 220, 255, 0.7); }
