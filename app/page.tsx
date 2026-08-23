@@ -20,9 +20,11 @@ import {
 import {
   allPartsDone,
   archiveMonth,
+  binPct,
   buildChores,
   dailyDone,
   getUrgency,
+  overallPct,
   resolveAssignees,
   sinceClass,
   sinceText,
@@ -47,7 +49,7 @@ interface Piece {
   sx: number; sy: number; rot: number;   // scatter offset + spin
   dx: number; dy: number; delay: number; // final offset into the bin
 }
-interface Flight { id: number; color: string; pieces: Piece[] }
+interface Flight { id: number; binId: string; color: string; pieces: Piece[] }
 
 // Until real onboarding (Phase 4), a brand-new device gets the template
 // household — the same board a fresh install had before.
@@ -137,15 +139,16 @@ export default function Home() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [hiddenNames, setHiddenNames] = useState<Set<number>>(() => new Set());
   const [returningNames, setReturningNames] = useState<Set<number>>(() => new Set());
-  const [binOpen, setBinOpen] = useState(false);
-  const [binPct, setBinPct] = useState(0);
+  const [openBins, setOpenBins] = useState<Set<string>>(() => new Set());
+  const [receivingBins, setReceivingBins] = useState<Set<string>>(() => new Set());
+  // Gauges held at their pre-log value while letters are in the air.
+  const [frozenPct, setFrozenPct] = useState<Map<string, number>>(() => new Map());
   const flightId = useRef(0);
   const nameRefs = useRef(new Map<number, HTMLDivElement>());
   const sinceRefs = useRef(new Map<number, HTMLDivElement>());
-  const binRef = useRef<HTMLDivElement>(null);
+  const binRefs = useRef(new Map<string, HTMLDivElement>());
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const reducedMotion = useRef(false);
-  const pctRef = useRef(0);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -304,8 +307,11 @@ export default function Home() {
   // DOM synchronously so the letters start exactly where the text is right now.
   function launch(i: number, person: Person) {
     if (reducedMotion.current) return;
+    const c = chores[i];
+    if (!c) return;
+    const binId = c.def.binId;
     const nameEl = nameRefs.current.get(i);
-    const binEl = binRef.current;
+    const binEl = binRefs.current.get(binId);
     if (!nameEl || !binEl) return;
     const textNode = nameEl.firstChild;
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return;
@@ -319,9 +325,11 @@ export default function Home() {
     }
     if (pieces.length === 0) return;
     const id = ++flightId.current;
-    // Freeze the displayed % at its pre-log value; the arrival timer ticks it up.
-    setBinPct(pctRef.current);
-    setFlights((f) => [...f, { id, color: person.color, pieces }]);
+    // Hold this bin's gauge at its pre-log value until the letters land.
+    const binDef = config.bins.find((bb) => bb.id === binId);
+    const held = binDef ? binPct(binDef, chores, people) : 0;
+    setFrozenPct((m) => new Map(m).set(binId, held));
+    setFlights((f) => [...f, { id, binId, color: person.color, pieces }]);
     setHiddenNames((s) => setToggle(s, i, true));
 
     later(() => {
@@ -330,13 +338,19 @@ export default function Home() {
       later(() => setReturningNames((s) => setToggle(s, i, false)), RETURN_MS);
     }, REASSEMBLE_DELAY);
 
-    later(() => setBinOpen(true), SCATTER_MS + 80);
+    later(() => setOpenBins((s) => new Set(s).add(binId)), SCATTER_MS + 80);
 
     later(() => {
-      setBinPct(pctRef.current);
       setFlights((f) => {
         const rest = f.filter((x) => x.id !== id);
-        if (rest.length === 0) later(() => setBinOpen(false), 250);
+        if (!rest.some((x) => x.binId === binId)) {
+          // Last letters for this bin just landed: release the gauge, flash
+          // the glow, and shut the doors.
+          setFrozenPct((m) => { const n = new Map(m); n.delete(binId); return n; });
+          setReceivingBins((s) => new Set(s).add(binId));
+          later(() => setReceivingBins((s) => { const n = new Set(s); n.delete(binId); return n; }), 600);
+          later(() => setOpenBins((s) => { const n = new Set(s); n.delete(binId); return n; }), 250);
+        }
         return rest;
       });
     }, FLIGHT_MS + 160);
@@ -411,22 +425,10 @@ export default function Home() {
     );
   }
 
-  // ── Progress (today's daily units; bins generalize this in Phase 2)
+  // ── Progress
   const dailyChores = chores.filter((c) => c.def.kind === "daily");
-  let pts = 0;
-  let units = 0;
-  dailyChores.forEach((c) => {
-    const assignees = resolveAssignees(c.def, people);
-    units += assignees.length;
-    pts += assignees.filter((p) => c.doneBy[p.id]).length;
-  });
-  const pct = units > 0 ? Math.round((pts / units) * 100) : 0;
-  const progColor = pct > 75 ? "#3D9E6A" : pct > 40 ? "#C89B2A" : "#B03030";
   const allDone = dailyChores.length > 0 && dailyChores.every((c) => dailyDone(c, people));
-  useEffect(() => { pctRef.current = pct; }, [pct]);
-  // With nothing in the air (un-logs, reduced motion, first load) the bin
-  // shows the real % immediately; mid-flight it holds until letters land.
-  const shownPct = flights.length === 0 ? pct : binPct;
+  const overall = overallPct(config.bins, chores, people);
   // People who have finished every daily chore assigned to them.
   const finishedPeople = people.filter((p) => {
     const mine = dailyChores.filter((c) => resolveAssignees(c.def, people).some((a) => a.id === p.id));
@@ -496,7 +498,8 @@ export default function Home() {
           {people.map((p) => (
             <span key={p.id}><span className="leg-dot" style={{ background: p.color }} />{p.name}</span>
           ))}
-          <button className="nav-btn" onClick={() => setPage(1)} style={{ marginLeft: "auto" }}>Overview →</button>
+          <span className="legend-pct" style={{ marginLeft: "auto" }}>{overall}%</span>
+          <button className="nav-btn" onClick={() => setPage(1)}>Overview →</button>
         </div>
 
         <div className="board-grid">
@@ -507,14 +510,14 @@ export default function Home() {
               const full = dailyDone(c, people);
               return (
                 <div key={c.def.id} className={`card-wrap ${c.expanded ? "has-panel" : ""}`}>
-                  <div className="task-card" onClick={() => toggleCard(i)}>
+                  <div className={`task-card${full ? " chore-done" : ""}`} onClick={() => toggleCard(i)}>
                     <div className="urgency-bar bar-blue" />
                     {c.def.icon && (
                       <div className="card-image-bg" style={{ backgroundImage: `url(${c.def.icon})` }} />
                     )}
                     <div className="card-tint tint-blue" />
                     <div className="card-top">
-                      <div className={`card-name${full ? " name-done" : ""}${nameClass(i)}`} ref={(el) => setNameRef(i, el)}>{c.def.name}</div>
+                      <div className={`card-name${nameClass(i)}`} ref={(el) => setNameRef(i, el)}>{c.def.name}</div>
                       <div className={`card-since ${sinceClass(c, people)}${nameClass(i)}`} ref={(el) => setSinceRef(i, el)}>{sinceText(c, people)}</div>
                     </div>
                     <div className="card-bottom">
@@ -559,14 +562,14 @@ export default function Home() {
             const lastPerson = people.find((p) => p.id === c.lastBy) ?? null;
             return (
               <div key={c.def.id} className={`card-wrap ${c.expanded ? "has-panel" : ""}`}>
-                <div className="task-card" onClick={() => toggleCard(i)}>
+                <div className={`task-card${c.done ? " chore-done" : ""}`} onClick={() => toggleCard(i)}>
                   <div className={`urgency-bar bar-${urg}`} />
                   {c.def.icon && (
                     <div className="card-image-bg" style={{ backgroundImage: `url(${c.def.icon})` }} />
                   )}
                   <div className={`card-tint tint-${urg}`} />
                   <div className="card-top">
-                    <div className={`card-name${c.done ? " name-done" : ""}${nameClass(i)}`} ref={(el) => setNameRef(i, el)}>{c.def.name}</div>
+                    <div className={`card-name${nameClass(i)}`} ref={(el) => setNameRef(i, el)}>{c.def.name}</div>
                     <div className={`card-since ${sinceClass(c, people)}${nameClass(i)}`} ref={(el) => setSinceRef(i, el)}>{sinceText(c, people)}</div>
                   </div>
                   <div className="card-bottom">
@@ -763,15 +766,30 @@ export default function Home() {
           >{p.ch}</span>
         ))
       )}
-      <div ref={binRef} className={`mdr-bin${binOpen ? " open" : ""}`}>
-        <div className="mdr-lid">
-          <div className="mdr-door mdr-door-l" />
-          <div className="mdr-door mdr-door-r" />
-        </div>
-        <div className="mdr-body">
-          <span className="mdr-label">MDR</span>
-          <span className="mdr-pct" style={{ color: progColor }}>{shownPct}%</span>
-        </div>
+      <div className="bin-dock">
+        {[...config.bins].sort((a, b) => a.order - b.order).map((b) => {
+          const shown = frozenPct.get(b.id) ?? binPct(b, chores, people);
+          return (
+            <div
+              key={b.id}
+              ref={(el) => { if (el) binRefs.current.set(b.id, el); else binRefs.current.delete(b.id); }}
+              className={`bin${openBins.has(b.id) ? " open" : ""}${receivingBins.has(b.id) ? " receiving" : ""}`}
+            >
+              <div className="mdr-lid">
+                <div className="mdr-door mdr-door-l" />
+                <div className="mdr-door mdr-door-r" />
+              </div>
+              <div className="bin-tag">
+                <span className="bin-num">{b.num}</span>
+                <span className="bin-cat">{b.label}</span>
+              </div>
+              <div className="bin-gauge">
+                <div className="bin-fill" style={{ width: `${shown}%` }} />
+                <div className="bin-val">{shown}%</div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
     </div>
