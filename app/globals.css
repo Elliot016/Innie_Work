@@ -548,10 +548,13 @@ body {
 .bin-dock {
   position: absolute; left: 14px; right: 14px;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+  display: flex; justify-content: center; gap: 12px;
 }
-@media (max-width: 700px) { .bin-dock { grid-template-columns: repeat(2, 1fr); gap: 8px; } }
-.bin { position: relative; }
+.bin { position: relative; flex: 1 1 0; min-width: 130px; max-width: 260px; }
+@media (max-width: 700px) {
+  .bin-dock { flex-wrap: wrap; gap: 8px; }
+  .bin { flex: 1 1 40%; max-width: none; }
+}
 .bin.receiving { filter: drop-shadow(0 0 12px rgba(180, 220, 255, 0.5)); }
 /* Lid is two doors that split down the middle and swing up from their outer hinges. */
 .mdr-lid { display: flex; height: 8px; }
