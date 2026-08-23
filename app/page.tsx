@@ -32,6 +32,7 @@ import {
 } from "@/lib/logic";
 import { loadAll, saveAll } from "@/lib/storage";
 import DigitField from "./components/DigitField";
+import KierOverlay from "./components/KierOverlay";
 import Onboarding from "./components/Onboarding";
 import SettingsPage from "./components/SettingsPage";
 import TerminalFrame from "./components/TerminalFrame";
@@ -94,6 +95,8 @@ export default function Home() {
   const [page, setPage] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [kierShown, setKierShown] = useState(false);
+  const kierArmed = useRef(true); // fires once per day, re-armed at rollover
   const [dayKey, setDayKey] = useState(() => todayStr());
   const pagesRef = useRef<HTMLDivElement>(null);
 
@@ -199,6 +202,8 @@ export default function Home() {
     if (!loaded) return;
     if (rolloverDayRef.current === dayKey) return;
     rolloverDayRef.current = dayKey;
+    kierArmed.current = true;
+    setKierShown(false);
     setChores((prev) =>
       prev.map((c) => {
         if (c.def.kind === "daily") return { ...c, doneBy: {}, expanded: false };
@@ -417,6 +422,18 @@ export default function Home() {
   const dailyChores = chores.filter((c) => c.def.kind === "daily");
   const allDone = dailyChores.length > 0 && dailyChores.every((c) => dailyDone(c, people));
   const overall = overallPct(config.bins, chores, people);
+
+  // Kier appears once per day, edge-triggered on crossing into 100% — after
+  // the last letters have had time to land in their bin.
+  const prevOverallRef = useRef(overall);
+  useEffect(() => {
+    if (loaded && kierArmed.current && prevOverallRef.current < 100 && overall === 100) {
+      kierArmed.current = false;
+      later(() => setKierShown(true), FLIGHT_MS + 400);
+    }
+    prevOverallRef.current = overall;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overall, loaded]);
   // People who have finished every daily chore assigned to them.
   const finishedPeople = people.filter((p) => {
     const mine = dailyChores.filter((c) => resolveAssignees(c.def, people).some((a) => a.id === p.id));
@@ -733,6 +750,7 @@ export default function Home() {
     </div>
 
     {needsOnboarding && <Onboarding onComplete={completeOnboarding} />}
+    <KierOverlay show={kierShown} onDismiss={() => setKierShown(false)} />
 
     {/* ── MDR LAYER: flying letters + the bin ── */}
     <div className={`mdr-layer${page === 0 ? "" : " mdr-hidden"}`} aria-hidden>
