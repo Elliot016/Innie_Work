@@ -147,21 +147,6 @@ body {
 }
 .dot.active { background: var(--text); transform: scale(1.3); }
 
-/* PROGRESS ROW */
-.progress-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.prog-track { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
-.prog-fill  { height: 100%; border-radius: 2px; transition: width 0.5s ease, background 0.5s; }
-.prog-pct   {
-  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
-  font-size: 0.65rem; font-weight: 700; color: var(--sub); min-width: 32px; text-align: right;
-}
-
 /* LEGEND */
 .legend {
   display: flex; gap: 14px;
@@ -219,10 +204,32 @@ body {
 .bar-green  { background: var(--green); }
 .bar-yellow { background: var(--yellow); }
 .bar-red    { background: var(--red); }
+
+/* Overdue cards breathe a soft red glow — slow and low so it nags, not screams.
+   The glow is inset so it stays within the card and never bleeds onto the board. */
+.task-card:has(.bar-red) {
+  animation: urgent-pulse 2.8s ease-in-out infinite;
+}
+.task-card:has(.bar-red) .urgency-bar { box-shadow: 0 0 8px 1px rgba(224, 80, 80, 0.55); }
+@keyframes urgent-pulse {
+  0%, 100% { border-color: rgba(224, 80, 80, 0.35); box-shadow: inset 0 0 0 0 rgba(224, 80, 80, 0); }
+  50%      { border-color: rgba(224, 80, 80, 0.85); box-shadow: inset 0 0 24px 2px rgba(224, 80, 80, 0.22); }
+}
 .bar-blue   { background: var(--blue); }
 
 .card-top { position: relative; z-index: 1; padding-left: 6px; padding-top: 4px; }
-.card-name { font-size: 0.9rem; font-weight: 700; line-height: 1.2; margin-bottom: 2px; }
+.card-name { font-size: 0.9rem; font-weight: 700; line-height: 1.2; margin-bottom: 2px;
+  transition: opacity 0.15s, filter 0.15s; }
+/* Name is "refined" away while its letters fly to the bin, then reassembles. */
+.card-since { transition: opacity 0.15s, filter 0.15s; }
+.card-name.name-refined, .card-since.name-refined { opacity: 0; filter: blur(2px); }
+.card-name.name-return,  .card-since.name-return  { animation: mdr-reassemble 0.35s ease-out; }
+@keyframes mdr-reassemble {
+  from { opacity: 0; letter-spacing: 0.2em; filter: blur(2px); }
+  to   { letter-spacing: 0; filter: none; }
+}
+/* Fully completed chores: the name goes ghosted so "done" reads at a glance. */
+.card-name.name-done { opacity: 0.35; transition: opacity 0.4s; }
 
 .card-since {
   font-size: 0.6rem; font-weight: 400; color: var(--sub);
@@ -241,8 +248,8 @@ body {
 .split-wrap { position: relative; width: 38px; height: 38px; }
 .split-wrap svg { width: 38px; height: 38px; }
 .c-track { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 3.5; }
-.c-e { fill: none; stroke: var(--elliot-light); stroke-width: 3.5; stroke-linecap: butt; transition: stroke-dashoffset 0.3s ease; }
-.c-p { fill: none; stroke: var(--paisley-light); stroke-width: 3.5; stroke-linecap: butt; transition: stroke-dashoffset 0.3s ease; }
+.c-e { fill: none; stroke: var(--elliot-light); stroke-width: 3.5; stroke-linecap: butt; }
+.c-p { fill: none; stroke: var(--paisley-light); stroke-width: 3.5; stroke-linecap: butt; }
 .c-initials { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 1px; }
 .c-initial  { font-size: 0.5rem; font-weight: 800; color: rgba(255,255,255,0.25); line-height: 1; transition: color 0.2s; font-family: var(--font-mono), 'IBM Plex Mono', monospace; }
 .c-initial.done { color: white; }
@@ -252,7 +259,7 @@ body {
 .ring-wrap { position: relative; width: 38px; height: 38px; }
 .ring-wrap svg { width: 38px; height: 38px; }
 .r-track { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 3.5; }
-.r-fill  { fill: none; stroke-width: 3.5; stroke-linecap: round; transition: stroke-dashoffset 0.4s ease, stroke 0.3s; }
+.r-fill  { fill: none; stroke-width: 3.5; stroke-linecap: round; transition: stroke 0.3s; }
 .ring-check   { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; }
 .ring-initial { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font-family: var(--font-mono), 'IBM Plex Mono', monospace; font-size: 0.5rem; font-weight: 800;
@@ -451,6 +458,63 @@ body {
 }
 
 .bottom-pad { height: 40px; }
+/* Board needs room for the fixed MDR bin. */
+.board-page { padding-bottom: 150px; }
+
+/* ── MDR (macrodata refinement) LAYER ── */
+.mdr-layer {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 50;
+  transition: opacity 0.25s ease;
+}
+.mdr-layer.mdr-hidden { opacity: 0; }
+
+.mdr-piece {
+  position: absolute; display: block;
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 0.9rem; font-weight: 700; line-height: 1.2;
+  text-align: center; white-space: pre;
+  will-change: transform, opacity;
+  text-shadow: 0 0 6px currentColor;
+}
+.mdr-piece.mdr-sub { font-size: 0.6rem; font-weight: 400; letter-spacing: 0.02em; text-shadow: 0 0 4px currentColor; }
+.mdr-e { color: var(--elliot-light); }
+.mdr-p { color: var(--paisley-light); }
+
+.mdr-bin {
+  position: absolute; left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  transform: translateX(-50%);
+  width: 150px;
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+}
+/* Lid is two doors that split down the middle and swing up from their outer hinges. */
+.mdr-lid { display: flex; height: 8px; }
+.mdr-door {
+  flex: 1; height: 100%;
+  border: 1px solid var(--text); border-bottom: none;
+  background: var(--bg);
+  transition: transform 0.22s ease-out;
+}
+.mdr-door-l { transform-origin: left bottom;  border-right-width: 0.5px; }
+.mdr-door-r { transform-origin: right bottom; border-left-width: 0.5px; }
+.mdr-bin.open .mdr-door-l { transform: rotate(-55deg); }
+.mdr-bin.open .mdr-door-r { transform: rotate(55deg); }
+.mdr-body {
+  border: 1px solid var(--text); background: var(--surface);
+  padding: 6px 10px;
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.mdr-label { font-size: 0.6rem; letter-spacing: 0.15em; color: var(--sub); }
+.mdr-pct   { font-size: 0.8rem; font-weight: 700; transition: color 0.3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .task-card:has(.bar-red) { animation: none; border-color: rgba(224, 80, 80, 0.6); box-shadow: inset 0 0 18px 1px rgba(224, 80, 80, 0.15); }
+  .mdr-piece { display: none; }
+  .card-name, .card-since, .card-name.name-return, .card-since.name-return { animation: none; transition: none; }
+  .card-name.name-refined, .card-since.name-refined { opacity: 1; filter: none; }
+  .mdr-door { transition: none; }
+}
 
 /* ── IPAD LANDSCAPE / LARGE SCREEN ── */
 @media (min-width: 1024px) {

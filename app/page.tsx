@@ -7,10 +7,26 @@ const R = 14;
 const CIRC = 2 * Math.PI * R;
 const HALF = CIRC / 2;
 
+// MDR ("macrodata refinement") bin animation timing
+const FLIGHT_MS = 1800;        // letter lifetime: scatter, then fall into the bin
+const SCATTER_MS = 520;        // scatter phase within FLIGHT_MS
+const REASSEMBLE_DELAY = 1600; // name fades back onto the card after this
+const RETURN_MS = 350;         // length of the reassemble animation
+
 // ── Types
 type ChoreType = "both" | "single";
 type Urgency = "green" | "yellow" | "red";
 type Who = "e" | "p";
+
+// One letter of a chore name, in viewport px, with its flight path to the bin
+// pre-rolled so rendering stays pure.
+interface Piece {
+  ch: string; x: number; y: number; w: number; h: number;
+  sub: boolean;                          // from the small subtitle line, not the name
+  sx: number; sy: number; rot: number;   // scatter offset + spin
+  dx: number; dy: number; delay: number; // final offset into the bin
+}
+interface Flight { id: number; who: Who; pieces: Piece[] }
 
 interface ChoreDef {
   id: string;
@@ -251,6 +267,29 @@ function RingSVG({ done, who }: { done: boolean; who: string | null }) {
 }
 
 // ── Main component
+// Measure each glyph of a text node and roll a random flight path for it.
+function buildPieces(textNode: Node, bin: { x: number; y: number }, sub = false): Piece[] {
+  const text = textNode.textContent ?? "";
+  const range = document.createRange();
+  const pieces: Piece[] = [];
+  for (let k = 0; k < text.length; k++) {
+    if (text[k].trim() === "") continue;
+    range.setStart(textNode, k);
+    range.setEnd(textNode, k + 1);
+    const r = range.getBoundingClientRect();
+    pieces.push({
+      ch: text[k], x: r.left, y: r.top, w: r.width, h: r.height, sub,
+      sx: (Math.random() - 0.5) * 60,
+      sy: -(10 + Math.random() * 30),
+      rot: (Math.random() - 0.5) * 90,
+      dx: bin.x - r.left - r.width / 2 + (Math.random() - 0.5) * 24,
+      dy: bin.y - r.top,
+      delay: Math.random() * 120,
+    });
+  }
+  return pieces;
+}
+
 export default function Home() {
   const [chores, setChores] = useState<ChoreState[]>(() => buildChores());
   const [weekly, setWeekly] = useState<PeriodLog>(() => emptyPeriod(weekStartStr()));
@@ -262,6 +301,60 @@ export default function Home() {
   const [dayKey, setDayKey] = useState(() => todayStr());
   const touchStartX = useRef(0);
   const pagesRef = useRef<HTMLDivElement>(null);
+
+  // ── MDR bin animation state
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const [hiddenNames, setHiddenNames] = useState<Set<number>>(() => new Set());
+  const [returningNames, setReturningNames] = useState<Set<number>>(() => new Set());
+  const [binOpen, setBinOpen] = useState(false);
+  const [binPct, setBinPct] = useState(0);
+  const flightId = useRef(0);
+  const nameRefs = useRef(new Map<number, HTMLDivElement>());
+  const sinceRefs = useRef(new Map<number, HTMLDivElement>());
+  const binRef = useRef<HTMLDivElement>(null);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const reducedMotion = useRef(false);
+  const pctRef = useRef(0);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    reducedMotion.current = mq.matches;
+    const onChange = (e: MediaQueryListEvent) => { reducedMotion.current = e.matches; };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  // Drop every pending animation timer if the page unmounts.
+  useEffect(() => {
+    const pending = timers.current;
+    return () => { pending.forEach(clearTimeout); pending.clear(); };
+  }, []);
+
+  function later(fn: () => void, ms: number) {
+    const t = setTimeout(() => { timers.current.delete(t); fn(); }, ms);
+    timers.current.add(t);
+  }
+
+  function setNameRef(i: number, el: HTMLDivElement | null) {
+    if (el) nameRefs.current.set(i, el);
+    else nameRefs.current.delete(i);
+  }
+  function setSinceRef(i: number, el: HTMLDivElement | null) {
+    if (el) sinceRefs.current.set(i, el);
+    else sinceRefs.current.delete(i);
+  }
+
+  function nameClass(i: number) {
+    if (hiddenNames.has(i)) return " name-refined";
+    if (returningNames.has(i)) return " name-return";
+    return "";
+  }
+
+  const setToggle = (s: Set<number>, i: number, on: boolean) => {
+    const n = new Set(s);
+    if (on) n.add(i); else n.delete(i);
+    return n;
+  };
 
   const dateStr = new Date().toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric",
@@ -419,11 +512,70 @@ export default function Home() {
     });
   }
 
+  // Explode the chore's name into letters and send them to the bin. Reads the
+  // DOM synchronously so the letters start exactly where the text is right now.
+  function launch(i: number, who: Who) {
+    if (reducedMotion.current) return;
+    const nameEl = nameRefs.current.get(i);
+    const binEl = binRef.current;
+    if (!nameEl || !binEl) return;
+    const textNode = nameEl.firstChild;
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return;
+    const b = binEl.getBoundingClientRect();
+    const bin = { x: b.left + b.width / 2, y: b.top + 4 };
+    const pieces = buildPieces(textNode, bin);
+    // The subtitle line ("daily · resets midnight", "3 of 7 days") goes too.
+    const sinceNode = sinceRefs.current.get(i)?.firstChild;
+    if (sinceNode && sinceNode.nodeType === Node.TEXT_NODE) {
+      pieces.push(...buildPieces(sinceNode, bin, true));
+    }
+    if (pieces.length === 0) return;
+    const id = ++flightId.current;
+    // Freeze the displayed % at its pre-log value; the arrival timer ticks it up.
+    setBinPct(pctRef.current);
+    setFlights((f) => [...f, { id, who, pieces }]);
+    setHiddenNames((s) => setToggle(s, i, true));
+
+    later(() => {
+      setHiddenNames((s) => setToggle(s, i, false));
+      setReturningNames((s) => setToggle(s, i, true));
+      later(() => setReturningNames((s) => setToggle(s, i, false)), RETURN_MS);
+    }, REASSEMBLE_DELAY);
+
+    later(() => setBinOpen(true), SCATTER_MS + 80);
+
+    later(() => {
+      setBinPct(pctRef.current);
+      setFlights((f) => {
+        const rest = f.filter((x) => x.id !== id);
+        if (rest.length === 0) later(() => setBinOpen(false), 250);
+        return rest;
+      });
+    }, FLIGHT_MS + 160);
+  }
+
+  // Ref callback for each flying letter: runs once per mount, so Strict Mode's
+  // double effects can't double-animate.
+  function animatePiece(el: HTMLSpanElement | null, p: Piece) {
+    if (!el || el.dataset.animated) return;
+    el.dataset.animated = "1";
+    el.animate(
+      [
+        { transform: "translate(0,0) rotate(0deg) scale(1)", opacity: 1, offset: 0 },
+        { transform: `translate(${p.sx}px,${p.sy}px) rotate(${p.rot}deg) scale(1)`, opacity: 1,
+          offset: SCATTER_MS / FLIGHT_MS, easing: "cubic-bezier(.2,.9,.3,1)" },
+        { transform: `translate(${p.dx}px,${p.dy}px) rotate(${p.rot * 2}deg) scale(0.4)`, opacity: 0.9, offset: 1 },
+      ],
+      { duration: FLIGHT_MS, delay: p.delay, easing: "cubic-bezier(.55,0,.85,.4)", fill: "forwards" }
+    );
+  }
+
   function logBoth(i: number, who: Who) {
     const c = chores[i];
     if (!c) return;
     // Checking on counts toward this month; un-checking (a fix) backs it out.
     const turningOn = who === "e" ? !c.eDone : !c.pDone;
+    if (turningOn) launch(i, who);
     bump(c.def.id, who, turningOn ? 1 : -1);
     setChores((prev) =>
       prev.map((cc, idx) => {
@@ -451,6 +603,7 @@ export default function Home() {
     if (!c) return;
     // A chore with sub-tasks isn't done until every one of them is ticked.
     if (!allPartsDone(c)) return;
+    launch(i, who);
     const today = todayStr();
     bump(c.def.id, who, 1);
     setChores((prev) =>
@@ -477,6 +630,10 @@ export default function Home() {
   const pct = dailyChores.length > 0 ? Math.round((pts / (dailyChores.length * 2)) * 100) : 0;
   const progColor = pct > 75 ? "#3D9E6A" : pct > 40 ? "#C89B2A" : "#B03030";
   const allDone = dailyChores.every((c) => c.eDone && c.pDone);
+  useEffect(() => { pctRef.current = pct; }, [pct]);
+  // With nothing in the air (un-logs, reduced motion, first load) the bin
+  // shows the real % immediately; mid-flight it holds until letters land.
+  const shownPct = flights.length === 0 ? pct : binPct;
   const eDoneAll = dailyChores.length > 0 && dailyChores.every((c) => c.eDone);
   const pDoneAll = dailyChores.length > 0 && dailyChores.every((c) => c.pDone);
 
@@ -538,12 +695,6 @@ export default function Home() {
               <div className="header-date">{dateStr}</div>
             </div>
           </div>
-          <div className="progress-row">
-            <div className="prog-track">
-              <div className="prog-fill" style={{ width: `${pct}%`, background: progColor }} />
-            </div>
-            <div className="prog-pct">{pct}%</div>
-          </div>
           <div className="page-dots">
             <div className={`dot ${page === 0 ? "active" : ""}`} onClick={() => setPage(0)} style={{ cursor: "pointer" }} />
             <div className={`dot ${page === 1 ? "active" : ""}`} onClick={() => setPage(1)} style={{ cursor: "pointer" }} />
@@ -570,8 +721,8 @@ export default function Home() {
                     )}
                     <div className="card-tint tint-blue" />
                     <div className="card-top">
-                      <div className="card-name">{c.def.name}</div>
-                      <div className={`card-since ${sinceClass(c)}`}>{sinceText(c)}</div>
+                      <div className={`card-name${both ? " name-done" : ""}${nameClass(i)}`} ref={(el) => setNameRef(i, el)}>{c.def.name}</div>
+                      <div className={`card-since ${sinceClass(c)}${nameClass(i)}`} ref={(el) => setSinceRef(i, el)}>{sinceText(c)}</div>
                     </div>
                     <div className="card-bottom">
                       <div className="split-wrap">
@@ -617,8 +768,8 @@ export default function Home() {
                   )}
                   <div className={`card-tint tint-${urg}`} />
                   <div className="card-top">
-                    <div className="card-name">{c.def.name}</div>
-                    <div className={`card-since ${sinceClass(c)}`}>{sinceText(c)}</div>
+                    <div className={`card-name${c.done ? " name-done" : ""}${nameClass(i)}`} ref={(el) => setNameRef(i, el)}>{c.def.name}</div>
+                    <div className={`card-since ${sinceClass(c)}${nameClass(i)}`} ref={(el) => setSinceRef(i, el)}>{sinceText(c)}</div>
                   </div>
                   <div className="card-bottom">
                     <div className="ring-wrap">
@@ -820,6 +971,30 @@ export default function Home() {
         </div>
 
         <div className="bottom-pad" />
+      </div>
+    </div>
+
+    {/* ── MDR LAYER: flying letters + the bin ── */}
+    <div className={`mdr-layer${page === 0 ? "" : " mdr-hidden"}`} aria-hidden>
+      {flights.map((f) =>
+        f.pieces.map((p, k) => (
+          <span
+            key={`${f.id}-${k}`}
+            className={`mdr-piece mdr-${f.who}${p.sub ? " mdr-sub" : ""}`}
+            style={{ left: p.x, top: p.y, width: p.w, height: p.h }}
+            ref={(el) => animatePiece(el, p)}
+          >{p.ch}</span>
+        ))
+      )}
+      <div ref={binRef} className={`mdr-bin${binOpen ? " open" : ""}`}>
+        <div className="mdr-lid">
+          <div className="mdr-door mdr-door-l" />
+          <div className="mdr-door mdr-door-r" />
+        </div>
+        <div className="mdr-body">
+          <span className="mdr-label">MDR</span>
+          <span className="mdr-pct" style={{ color: progColor }}>{shownPct}%</span>
+        </div>
       </div>
     </div>
     </div>
