@@ -7,6 +7,7 @@ import {
   PeriodLogV2,
   PersistedV2,
   Person,
+  emptyConfig,
   emptyPeriod,
   templateConfig,
 } from "@/lib/model";
@@ -31,6 +32,8 @@ import {
 } from "@/lib/logic";
 import { loadAll, saveAll } from "@/lib/storage";
 import DigitField from "./components/DigitField";
+import Onboarding from "./components/Onboarding";
+import SettingsPage from "./components/SettingsPage";
 import TerminalFrame from "./components/TerminalFrame";
 
 // MDR ("macrodata refinement") bin animation timing
@@ -90,6 +93,7 @@ export default function Home() {
   const [viewMonth, setViewMonth] = useState<string>(() => monthStr());
   const [page, setPage] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [dayKey, setDayKey] = useState(() => todayStr());
   const pagesRef = useRef<HTMLDivElement>(null);
 
@@ -171,9 +175,7 @@ export default function Home() {
         setMonthly(emptyPeriod(monthStr()));
       }
     } else {
-      const cfg = templateConfig(DEFAULT_PEOPLE);
-      setConfig(cfg);
-      setChores(buildChores(cfg, null));
+      setNeedsOnboarding(true);
     }
     setLoaded(true);
   }, []);
@@ -216,7 +218,7 @@ export default function Home() {
 
   // Persist the whole household in one atomic blob.
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || needsOnboarding) return;
     const data: PersistedV2 = {
       schemaVersion: 2,
       config,
@@ -233,7 +235,33 @@ export default function Home() {
       history,
     };
     saveAll(data);
-  }, [config, chores, weekly, monthly, history, loaded]);
+  }, [config, chores, weekly, monthly, history, loaded, needsOnboarding]);
+
+  // Apply a settings edit and rebuild the runtime chore list, carrying over
+  // today's done-state for chores that survive the edit.
+  function updateConfig(mutate: (cfg: HouseholdConfig) => HouseholdConfig) {
+    const next = mutate(config);
+    setConfig(next);
+    setChores((prev) =>
+      buildChores(next, {
+        savedDate: todayStr(),
+        choreState: prev.map((c) => ({
+          id: c.def.id,
+          doneBy: c.doneBy,
+          lastDoneDate: c.lastDoneDate,
+          lastBy: c.lastBy,
+          partsDone: c.partsDone,
+        })),
+      })
+    );
+  }
+
+  function completeOnboarding(newPeople: Person[], mode: "template" | "empty") {
+    const cfg = mode === "template" ? templateConfig(newPeople) : emptyConfig(newPeople);
+    setConfig(cfg);
+    setChores(buildChores(cfg, null));
+    setNeedsOnboarding(false);
+  }
 
   // ── Handlers
   function toggleCard(i: number) {
@@ -423,8 +451,8 @@ export default function Home() {
     const onEnd = (e: TouchEvent) => {
       const diff = startX - e.changedTouches[0].clientX;
       if (Math.abs(diff) < 30) return;
-      if (diff > 0 && pageRef.current === 0) setPage(1);
-      if (diff < 0 && pageRef.current === 1) setPage(0);
+      if (diff > 0) setPage(Math.min(2, pageRef.current + 1));
+      if (diff < 0) setPage(Math.max(0, pageRef.current - 1));
     };
     el.addEventListener("touchstart", onStart, { passive: true });
     el.addEventListener("touchend", onEnd, { passive: true });
@@ -446,10 +474,12 @@ export default function Home() {
             <span key={p.id}><span className="leg-dot" style={{ background: p.color }} />{p.name}</span>
           ))}
           <span className="page-dots" style={{ marginLeft: "auto" }}>
-            <span className={`dot ${page === 0 ? "active" : ""}`} onClick={() => setPage(0)} style={{ cursor: "pointer" }} />
-            <span className={`dot ${page === 1 ? "active" : ""}`} onClick={() => setPage(1)} style={{ cursor: "pointer" }} />
+            {[0, 1, 2].map((n) => (
+              <span key={n} className={`dot ${page === n ? "active" : ""}`} onClick={() => setPage(n)} style={{ cursor: "pointer" }} />
+            ))}
           </span>
           <button className="nav-btn" onClick={() => setPage(1)}>Overview →</button>
+          <button className="nav-btn" onClick={() => setPage(2)} aria-label="Manage">⚙</button>
         </div>
 
         <div className="board-grid">
@@ -684,7 +714,25 @@ export default function Home() {
 
         <div className="bottom-pad" />
       </div>
+      {/* ── PAGE 3: MANAGE ── */}
+      <div className={`page settings-page${page === 2 ? " page-active" : ""}`}>
+        <div className="ov-header">
+          <div className="header-top">
+            <div>
+              <div className="ov-title">Manage</div>
+            </div>
+            <div className="header-right">
+              <div className="ov-subtitle">HOUSEHOLD CONFIG</div>
+            </div>
+          </div>
+          <button className="nav-btn" onClick={() => setPage(0)}>← Board</button>
+        </div>
+        <SettingsPage config={config} onUpdate={updateConfig} />
+        <div className="bottom-pad" />
+      </div>
     </div>
+
+    {needsOnboarding && <Onboarding onComplete={completeOnboarding} />}
 
     {/* ── MDR LAYER: flying letters + the bin ── */}
     <div className={`mdr-layer${page === 0 ? "" : " mdr-hidden"}`} aria-hidden>
