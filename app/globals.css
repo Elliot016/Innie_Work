@@ -15,7 +15,7 @@
   /* aliases kept for shared rules */
   --bg: var(--term-bg);
   --surface: var(--term-screen);
-  --surface2: rgba(13, 24, 38, 0.88);
+  --surface2: rgba(13, 24, 38, 0.97);
   --border: var(--term-line-soft);
   --text: var(--term-fg);
   --sub: var(--term-dim);
@@ -120,13 +120,13 @@ body {
   font-family: var(--font-display), 'VT323', monospace;
   font-size: 1.1rem;
   color: var(--term-fg);
-  opacity: 0.11;
-  text-shadow: var(--term-glow);
+  opacity: 0.06;
+  text-shadow: 0 0 5px rgba(180, 220, 255, 0.25);
 }
 .digit-field span.digit-scary { animation: lurk 7s ease-in-out infinite; }
 @keyframes lurk {
-  0%, 100% { transform: scale(1) translateY(0); opacity: 0.11; }
-  50%      { transform: scale(1.55) translateY(-3px); opacity: 0.32; }
+  0%, 100% { transform: scale(1) translateY(0); opacity: 0.06; }
+  50%      { transform: scale(1.5) translateY(-3px); opacity: 0.17; }
 }
 
 /* ── PAGE CONTAINER ── */
