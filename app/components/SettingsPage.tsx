@@ -37,7 +37,7 @@ function DeleteButton({ label, onConfirm, hint }: { label?: string; onConfirm: (
 }
 
 // ── PEOPLE ─────────────────────────────────────────────────────────────────
-function PersonForm({ person, config, onUpdate }: { person: Person; config: HouseholdConfig; onUpdate: Mutate }) {
+function PersonForm({ person, config, onUpdate, onDone }: { person: Person; config: HouseholdConfig; onUpdate: Mutate; onDone: () => void }) {
   const edit = (patch: Partial<Person>) =>
     onUpdate((cfg) => ({
       ...cfg,
@@ -65,29 +65,32 @@ function PersonForm({ person, config, onUpdate }: { person: Person; config: Hous
           ))}
         </div>
       </div>
-      {config.people.length > 1 && (
-        <DeleteButton
-          hint="CONFIRM? (their history stays)"
-          onConfirm={() =>
-            onUpdate((cfg) => ({
-              ...cfg,
-              people: cfg.people.filter((p) => p.id !== person.id),
-              // Strip them from explicit assignee lists; a list emptied this
-              // way falls back to "everyone".
-              chores: cfg.chores.map((ch) => ({
-                ...ch,
-                assignees: ch.assignees.filter((a) => a !== person.id),
-              })),
-            }))
-          }
-        />
-      )}
+      <div className="set-form-actions">
+        <button className="set-btn done" onClick={onDone}>✓ DONE</button>
+        {config.people.length > 1 && (
+          <DeleteButton
+            hint="CONFIRM? (their history stays)"
+            onConfirm={() =>
+              onUpdate((cfg) => ({
+                ...cfg,
+                people: cfg.people.filter((p) => p.id !== person.id),
+                // Strip them from explicit assignee lists; a list emptied this
+                // way falls back to "everyone".
+                chores: cfg.chores.map((ch) => ({
+                  ...ch,
+                  assignees: ch.assignees.filter((a) => a !== person.id),
+                })),
+              }))
+            }
+          />
+        )}
+      </div>
     </div>
   );
 }
 
 // ── BINS ───────────────────────────────────────────────────────────────────
-function BinForm({ bin, config, onUpdate }: { bin: Bin; config: HouseholdConfig; onUpdate: Mutate }) {
+function BinForm({ bin, config, onUpdate, onDone }: { bin: Bin; config: HouseholdConfig; onUpdate: Mutate; onDone: () => void }) {
   const edit = (patch: Partial<Bin>) =>
     onUpdate((cfg) => ({
       ...cfg,
@@ -101,30 +104,33 @@ function BinForm({ bin, config, onUpdate }: { bin: Bin; config: HouseholdConfig;
       <label className="set-label">Label
         <input className="set-input" value={bin.label} onChange={(e) => edit({ label: e.target.value.toUpperCase() })} />
       </label>
-      {config.bins.length > 1 && (
-        <DeleteButton
-          hint="CONFIRM? (its chores move)"
-          onConfirm={() =>
-            onUpdate((cfg) => {
-              const rest = cfg.bins.filter((b) => b.id !== bin.id);
-              const target = rest[0];
-              return {
-                ...cfg,
-                bins: rest,
-                chores: cfg.chores.map((ch) =>
-                  ch.binId === bin.id ? { ...ch, binId: target.id } : ch
-                ),
-              };
-            })
-          }
-        />
-      )}
+      <div className="set-form-actions">
+        <button className="set-btn done" onClick={onDone}>✓ DONE</button>
+        {config.bins.length > 1 && (
+          <DeleteButton
+            hint="CONFIRM? (its chores move)"
+            onConfirm={() =>
+              onUpdate((cfg) => {
+                const rest = cfg.bins.filter((b) => b.id !== bin.id);
+                const target = rest[0];
+                return {
+                  ...cfg,
+                  bins: rest,
+                  chores: cfg.chores.map((ch) =>
+                    ch.binId === bin.id ? { ...ch, binId: target.id } : ch
+                  ),
+                };
+              })
+            }
+          />
+        )}
+      </div>
     </div>
   );
 }
 
 // ── CHORES ─────────────────────────────────────────────────────────────────
-function ChoreForm({ chore, config, onUpdate }: { chore: ChoreDefV2; config: HouseholdConfig; onUpdate: Mutate }) {
+function ChoreForm({ chore, config, onUpdate, onDone }: { chore: ChoreDefV2; config: HouseholdConfig; onUpdate: Mutate; onDone: () => void }) {
   const edit = (patch: Partial<ChoreDefV2>) =>
     onUpdate((cfg) => ({
       ...cfg,
@@ -252,11 +258,14 @@ function ChoreForm({ chore, config, onUpdate }: { chore: ChoreDefV2; config: Hou
           ))}
         </div>
       </div>
-      <DeleteButton
-        onConfirm={() =>
-          onUpdate((cfg) => ({ ...cfg, chores: cfg.chores.filter((c) => c.id !== chore.id) }))
-        }
-      />
+      <div className="set-form-actions">
+        <button className="set-btn done" onClick={onDone}>✓ DONE</button>
+        <DeleteButton
+          onConfirm={() =>
+            onUpdate((cfg) => ({ ...cfg, chores: cfg.chores.filter((c) => c.id !== chore.id) }))
+          }
+        />
+      </div>
     </div>
   );
 }
@@ -327,7 +336,7 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
               </span>
               <span className="set-row-hint">{open === p.id ? "CLOSE" : "EDIT"}</span>
             </button>
-            {open === p.id && <PersonForm person={p} config={config} onUpdate={onUpdate} />}
+            {open === p.id && <PersonForm person={p} config={config} onUpdate={onUpdate} onDone={() => setOpen(null)} />}
           </div>
         ))}
         <button className="set-row add" onClick={addPerson}>[ + ADD PERSON ]</button>
@@ -343,7 +352,7 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
                 {config.chores.filter((c) => c.binId === b.id).length} CHORES · {open === b.id ? "CLOSE" : "EDIT"}
               </span>
             </button>
-            {open === b.id && <BinForm bin={b} config={config} onUpdate={onUpdate} />}
+            {open === b.id && <BinForm bin={b} config={config} onUpdate={onUpdate} onDone={() => setOpen(null)} />}
           </div>
         ))}
         <button className="set-row add" onClick={addBin}>[ + ADD BIN ]</button>
@@ -357,7 +366,7 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
               <span className="set-row-name">{c.name}</span>
               <span className="set-row-hint">{binLabel(c.binId)} · {open === c.id ? "CLOSE" : "EDIT"}</span>
             </button>
-            {open === c.id && <ChoreForm chore={c} config={config} onUpdate={onUpdate} />}
+            {open === c.id && <ChoreForm chore={c} config={config} onUpdate={onUpdate} onDone={() => setOpen(null)} />}
           </div>
         ))}
         <button className="set-row add" onClick={addChore}>[ + ADD CHORE ]</button>
