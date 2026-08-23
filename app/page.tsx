@@ -519,6 +519,21 @@ export default function Home() {
     };
   }, []);
 
+  // The same nav strip on every page, always on the right: dots, then links
+  // to the pages you're not on, with Manage last.
+  const pageNav = (
+    <span className="page-nav">
+      <span className="page-dots">
+        {[0, 1, 2].map((n) => (
+          <span key={n} className={`dot ${page === n ? "active" : ""}`} onClick={() => setPage(n)} style={{ cursor: "pointer" }} />
+        ))}
+      </span>
+      {page !== 0 && <button className="nav-btn" onClick={() => setPage(0)}>← Board</button>}
+      {page !== 1 && <button className="nav-btn" onClick={() => setPage(1)}>Overview →</button>}
+      {page !== 2 && <button className="nav-btn" onClick={() => setPage(2)} aria-label="Manage">⚙</button>}
+    </span>
+  );
+
   return (
     <div className="clip-wrap scanlines">
     <DigitField />
@@ -530,13 +545,7 @@ export default function Home() {
           {people.map((p) => (
             <span key={p.id}><span className="leg-dot" style={{ background: p.color }} />{p.name}</span>
           ))}
-          <span className="page-dots" style={{ marginLeft: "auto" }}>
-            {[0, 1, 2].map((n) => (
-              <span key={n} className={`dot ${page === n ? "active" : ""}`} onClick={() => setPage(n)} style={{ cursor: "pointer" }} />
-            ))}
-          </span>
-          <button className="nav-btn" onClick={() => setPage(1)}>Overview →</button>
-          <button className="nav-btn" onClick={() => setPage(2)} aria-label="Manage">⚙</button>
+          {pageNav}
         </div>
 
         <div className="board-grid">
@@ -692,7 +701,7 @@ export default function Home() {
               <div className="ov-subtitle">{weekLabel}</div>
             </div>
           </div>
-          <button className="nav-btn" onClick={() => setPage(0)}>← Board</button>
+          {pageNav}
         </div>
 
         <div className="ov-body">
@@ -782,7 +791,7 @@ export default function Home() {
               <div className="ov-subtitle">HOUSEHOLD CONFIG</div>
             </div>
           </div>
-          <button className="nav-btn" onClick={() => setPage(0)}>← Board</button>
+          {pageNav}
         </div>
         <SettingsPage config={config} onUpdate={updateConfig} />
         <div className="bottom-pad" />

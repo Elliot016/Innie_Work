@@ -867,3 +867,12 @@ body {
 }
 .set-sec-head .set-title { margin-bottom: 0; }
 .set-sec-head:active .set-title { text-shadow: 0 0 10px rgba(180, 220, 255, 0.7); }
+
+/* The page nav strip: same contents, same right-hand side, on every page */
+.page-nav {
+  display: flex; align-items: center; gap: 14px;
+  width: fit-content;      /* so margin-left:auto right-aligns in block context */
+  margin-left: auto;
+}
+.page-nav .nav-btn { padding: 4px 0; }
+.ov-header .page-nav { margin-top: 2px; }
