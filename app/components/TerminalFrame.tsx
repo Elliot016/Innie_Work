@@ -45,25 +45,9 @@ export default function TerminalFrame({
         <div className="term-date">{dateStr}</div>
         <div className="term-pct">{shown}% COMPLETE</div>
         <div className="term-logo" aria-hidden>
-          {/* HOME globe, per the MDR terminal mockup */}
-          <svg viewBox="0 0 150 52">
-            <defs>
-              <clipPath id="term-globe-clip">
-                <ellipse cx="75" cy="26" rx="70" ry="22" />
-              </clipPath>
-            </defs>
-            <ellipse cx="75" cy="26" rx="70" ry="22" fill="none" stroke="currentColor" strokeWidth="2" />
-            <g clipPath="url(#term-globe-clip)" stroke="currentColor" strokeWidth="1.4">
-              <line x1="0" y1="8" x2="150" y2="8" />
-              <line x1="0" y1="14" x2="150" y2="14" />
-              <line x1="0" y1="38" x2="150" y2="38" />
-              <line x1="0" y1="44" x2="150" y2="44" />
-            </g>
-            <rect x="5" y="17" width="140" height="18" fill="var(--term-bg)" />
-            <text x="75" y="32" textAnchor="middle" fill="currentColor" fontFamily="var(--font-display), monospace" fontSize="21" letterSpacing="6">
-              HOME
-            </text>
-          </svg>
+          {/* The Innie House atom */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/innie-house.png" alt="" className="term-logo-img" />
         </div>
       </header>
       <div className="term-hex" aria-hidden>0x137056 : 0x09B32E</div>

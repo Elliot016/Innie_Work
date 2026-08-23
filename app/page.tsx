@@ -426,7 +426,15 @@ export default function Home() {
   // Kier appears once per day, edge-triggered on crossing into 100% — after
   // the last letters have had time to land in their bin.
   const prevOverallRef = useRef(overall);
+  const kierBaselineSet = useRef(false);
   useEffect(() => {
+    // First run after load is the baseline, not an edge — otherwise opening
+    // the app while already at 100% replays the overlay.
+    if (loaded && !kierBaselineSet.current) {
+      kierBaselineSet.current = true;
+      prevOverallRef.current = overall;
+      return;
+    }
     if (loaded && kierArmed.current && prevOverallRef.current < 100 && overall === 100) {
       kierArmed.current = false;
       later(() => setKierShown(true), FLIGHT_MS + 400);

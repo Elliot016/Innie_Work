@@ -844,3 +844,10 @@ body {
   text-shadow: 0 0 6px color-mix(in srgb, var(--green) 45%, transparent);
 }
 .set-btn.done:active { background: color-mix(in srgb, var(--green) 25%, transparent); }
+
+/* Header logo: the Innie House atom, inverted to phosphor white on navy */
+.term-logo-img {
+  height: 38px;
+  width: auto;
+  filter: invert(1) drop-shadow(0 0 4px rgba(180, 220, 255, 0.45));
+}
