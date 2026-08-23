@@ -30,10 +30,8 @@ import {
   sinceText,
 } from "@/lib/logic";
 import { loadAll, saveAll } from "@/lib/storage";
-
-// ── Ring geometry
-const R = 14;
-const CIRC = 2 * Math.PI * R;
+import DigitField from "./components/DigitField";
+import TerminalFrame from "./components/TerminalFrame";
 
 // MDR ("macrodata refinement") bin animation timing
 const FLIGHT_MS = 1800;        // letter lifetime: scatter, then fall into the bin
@@ -59,44 +57,6 @@ const DEFAULT_PEOPLE: Person[] = [
 ];
 
 const pcStyle = (color: string) => ({ "--pc": color } as CSSProperties);
-
-// ── SVG components
-// One arc per assignee; each lights up in that person's color when done.
-function SplitSVG({ chore, people }: { chore: ChoreState; people: Person[] }) {
-  const assignees = resolveAssignees(chore.def, people);
-  const n = Math.max(assignees.length, 1);
-  const seg = CIRC / n;
-  return (
-    <svg viewBox="0 0 38 38" width="38" height="38">
-      <circle className="c-track" cx="19" cy="19" r={R} strokeDasharray={CIRC} />
-      {assignees.map((p, i) => (
-        <circle
-          key={p.id}
-          className="c-arc"
-          cx="19" cy="19" r={R}
-          stroke={chore.doneBy[p.id] ? p.color : "transparent"}
-          strokeDasharray={`${seg} ${CIRC}`}
-          strokeDashoffset={-seg * i}
-          transform="rotate(-90 19 19)"
-        />
-      ))}
-    </svg>
-  );
-}
-
-function RingSVG({ done, color }: { done: boolean; color: string | null }) {
-  return (
-    <svg viewBox="0 0 38 38" width="38" height="38">
-      <circle className="r-track" cx="19" cy="19" r={R} strokeDasharray={CIRC} />
-      <circle
-        className="r-fill" cx="19" cy="19" r={R}
-        stroke={done ? color ?? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.15)"}
-        strokeDasharray={CIRC} strokeDashoffset={done ? 0 : CIRC}
-        transform="rotate(-90 19 19)"
-      />
-    </svg>
-  );
-}
 
 // Measure each glyph of a text node and roll a random flight path for it.
 function buildPieces(textNode: Node, bin: { x: number; y: number }, sub = false): Piece[] {
@@ -475,30 +435,20 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="clip-wrap">
+    <div className="clip-wrap scanlines">
+    <DigitField />
+    <TerminalFrame dateStr={dateStr} pct={overall} />
     <div ref={pagesRef} className="pages">
       {/* ── PAGE 1: BOARD ── */}
       <div className={`page board-page${page === 0 ? " page-active" : ""}`}>
-        <div className="app-header">
-          <div className="header-top">
-            <div>
-              <div className="logo-name">Your Innie <span>Duties</span></div>
-            </div>
-            <div className="header-right">
-              <div className="header-date">{dateStr}</div>
-            </div>
-          </div>
-          <div className="page-dots">
-            <div className={`dot ${page === 0 ? "active" : ""}`} onClick={() => setPage(0)} style={{ cursor: "pointer" }} />
-            <div className={`dot ${page === 1 ? "active" : ""}`} onClick={() => setPage(1)} style={{ cursor: "pointer" }} />
-          </div>
-        </div>
-
         <div className="legend">
           {people.map((p) => (
             <span key={p.id}><span className="leg-dot" style={{ background: p.color }} />{p.name}</span>
           ))}
-          <span className="legend-pct" style={{ marginLeft: "auto" }}>{overall}%</span>
+          <span className="page-dots" style={{ marginLeft: "auto" }}>
+            <span className={`dot ${page === 0 ? "active" : ""}`} onClick={() => setPage(0)} style={{ cursor: "pointer" }} />
+            <span className={`dot ${page === 1 ? "active" : ""}`} onClick={() => setPage(1)} style={{ cursor: "pointer" }} />
+          </span>
           <button className="nav-btn" onClick={() => setPage(1)}>Overview →</button>
         </div>
 
@@ -511,36 +461,26 @@ export default function Home() {
               return (
                 <div key={c.def.id} className={`card-wrap ${c.expanded ? "has-panel" : ""}`}>
                   <div className={`task-card${full ? " chore-done" : ""}`} onClick={() => toggleCard(i)}>
-                    <div className="urgency-bar bar-blue" />
                     {c.def.icon && (
                       <div className="card-image-bg" style={{ backgroundImage: `url(${c.def.icon})` }} />
                     )}
-                    <div className="card-tint tint-blue" />
                     <div className="card-top">
                       <div className={`card-name${nameClass(i)}`} ref={(el) => setNameRef(i, el)}>{c.def.name}</div>
                       <div className={`card-since ${sinceClass(c, people)}${nameClass(i)}`} ref={(el) => setSinceRef(i, el)}>{sinceText(c, people)}</div>
                     </div>
                     <div className="card-bottom">
-                      <div className="split-wrap">
-                        <SplitSVG chore={c} people={people} />
-                        <div className="c-initials">
-                          {assignees.map((p) => (
-                            <span key={p.id} className={`c-initial ${c.doneBy[p.id] ? "done" : ""}`}>
-                              {p.name[0]?.toUpperCase()}
-                            </span>
-                          ))}
-                        </div>
-                        {full && <div className="both-check">✓</div>}
+                      <div className="person-chips">
+                        {assignees.map((p) => (
+                          <span
+                            key={p.id}
+                            className={`person-chip${c.doneBy[p.id] ? " done" : ""}`}
+                            style={pcStyle(p.color)}
+                          >
+                            {p.name[0]?.toUpperCase()}
+                          </span>
+                        ))}
                       </div>
-                      {!full && (
-                        <div className="who-status">
-                          {assignees.map((p) => (
-                            <div key={p.id} style={{ color: c.doneBy[p.id] ? p.color : "var(--sub)" }}>
-                              {p.name[0]?.toUpperCase()} {c.doneBy[p.id] ? "✓" : "—"}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      {full && <div className="card-check">✓</div>}
                     </div>
                   </div>
                   <div className={`log-panel ${c.expanded ? "open" : ""}`}>
@@ -562,22 +502,19 @@ export default function Home() {
             const lastPerson = people.find((p) => p.id === c.lastBy) ?? null;
             return (
               <div key={c.def.id} className={`card-wrap ${c.expanded ? "has-panel" : ""}`}>
-                <div className={`task-card${c.done ? " chore-done" : ""}`} onClick={() => toggleCard(i)}>
-                  <div className={`urgency-bar bar-${urg}`} />
+                <div className={`task-card${c.done ? " chore-done" : ""} age-${urg}`} onClick={() => toggleCard(i)}>
                   {c.def.icon && (
                     <div className="card-image-bg" style={{ backgroundImage: `url(${c.def.icon})` }} />
                   )}
-                  <div className={`card-tint tint-${urg}`} />
                   <div className="card-top">
                     <div className={`card-name${nameClass(i)}`} ref={(el) => setNameRef(i, el)}>{c.def.name}</div>
                     <div className={`card-since ${sinceClass(c, people)}${nameClass(i)}`} ref={(el) => setSinceRef(i, el)}>{sinceText(c, people)}</div>
                   </div>
                   <div className="card-bottom">
-                    <div className="ring-wrap">
-                      <RingSVG done={c.done} color={lastPerson?.color ?? null} />
+                    <div className="cycle-day">
                       {c.done
-                        ? <div className="ring-check">✓</div>
-                        : <div className="ring-initial">—</div>}
+                        ? <span className="person-chip done" style={pcStyle(lastPerson?.color ?? "#e8f2f8")}>{lastPerson?.name[0]?.toUpperCase() ?? "✓"}</span>
+                        : <span className="day-count">DAY {c.daysAgo}/{c.def.cycleDays}</span>}
                     </div>
                     <div className="who-status" style={{
                       color: c.done && lastPerson ? lastPerson.color : "var(--sub)",
@@ -665,13 +602,8 @@ export default function Home() {
               <div className="ov-title">Overview</div>
             </div>
             <div className="header-right">
-              <div className="header-date">{dateStr}</div>
               <div className="ov-subtitle">{weekLabel}</div>
             </div>
-          </div>
-          <div className="page-dots ov-page-dots">
-            <div className={`dot ${page === 0 ? "active" : ""}`} onClick={() => setPage(0)} style={{ cursor: "pointer" }} />
-            <div className={`dot ${page === 1 ? "active" : ""}`} onClick={() => setPage(1)} style={{ cursor: "pointer" }} />
           </div>
           <button className="nav-btn" onClick={() => setPage(0)}>← Board</button>
         </div>
