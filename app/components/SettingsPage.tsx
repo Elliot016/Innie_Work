@@ -371,6 +371,30 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
         ))}
         <button className="set-row add" onClick={addChore}>[ + ADD CHORE ]</button>
       </div>
+
+      <div className="set-section">
+        <div className="set-title">Messages</div>
+        <div className="set-form" style={{ paddingTop: 6 }}>
+          <label className="set-label">100% title
+            <input
+              className="set-input"
+              value={config.messages.completeTitle}
+              onChange={(e) =>
+                onUpdate((cfg) => ({ ...cfg, messages: { ...cfg.messages, completeTitle: e.target.value } }))
+              }
+            />
+          </label>
+          <label className="set-label">100% tagline
+            <input
+              className="set-input"
+              value={config.messages.completeTagline}
+              onChange={(e) =>
+                onUpdate((cfg) => ({ ...cfg, messages: { ...cfg.messages, completeTagline: e.target.value } }))
+              }
+            />
+          </label>
+        </div>
+      </div>
     </div>
   );
 }

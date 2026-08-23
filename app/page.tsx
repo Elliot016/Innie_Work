@@ -758,7 +758,12 @@ export default function Home() {
     </div>
 
     {needsOnboarding && <Onboarding onComplete={completeOnboarding} />}
-    <KierOverlay show={kierShown} onDismiss={() => setKierShown(false)} />
+    <KierOverlay
+      show={kierShown}
+      title={config.messages.completeTitle}
+      tagline={config.messages.completeTagline}
+      onDismiss={() => setKierShown(false)}
+    />
 
     {/* ── MDR LAYER: flying letters + the bin ── */}
     <div className={`mdr-layer${page === 0 ? "" : " mdr-hidden"}`} aria-hidden>

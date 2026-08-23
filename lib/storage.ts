@@ -1,6 +1,7 @@
 import {
   ChoreDayState,
   ChoreDefV2,
+  DEFAULT_MESSAGES,
   HouseholdConfig,
   PeriodLogV2,
   PersistedV2,
@@ -66,7 +67,12 @@ export function sanitize(raw: unknown): PersistedV2 | null {
     : [];
 
   if (people.length === 0 || bins.length === 0) return null;
-  const config: HouseholdConfig = { people, bins, chores };
+  const m = (cfg.messages ?? {}) as Record<string, unknown>;
+  const messages = {
+    completeTitle: str(m.completeTitle, DEFAULT_MESSAGES.completeTitle),
+    completeTagline: str(m.completeTagline, DEFAULT_MESSAGES.completeTagline),
+  };
+  const config: HouseholdConfig = { people, bins, chores, messages };
 
   const period = (v: unknown, fb: string): PeriodLogV2 => {
     if (!v || typeof v !== "object") return emptyPeriod(fb);

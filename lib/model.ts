@@ -33,10 +33,22 @@ export interface ChoreDefV2 {
   assignees: string[];
 }
 
+// Copy shown on the 100% celebration overlay — editable per household.
+export interface CelebrationMessages {
+  completeTitle: string;
+  completeTagline: string;
+}
+
+export const DEFAULT_MESSAGES: CelebrationMessages = {
+  completeTitle: "Purification Complete",
+  completeTagline: "Your Outties are Happy",
+};
+
 export interface HouseholdConfig {
   people: Person[];
   bins: Bin[];
   chores: ChoreDefV2[];
+  messages: CelebrationMessages;
 }
 
 // Per-chore rolling state (persisted).
@@ -131,11 +143,11 @@ export const TEMPLATE_CHORES: ChoreDefV2[] = [
 ];
 
 export function templateConfig(people: Person[]): HouseholdConfig {
-  return { people, bins: [...TEMPLATE_BINS], chores: TEMPLATE_CHORES.map((c) => ({ ...c })) };
+  return { people, bins: [...TEMPLATE_BINS], chores: TEMPLATE_CHORES.map((c) => ({ ...c })), messages: { ...DEFAULT_MESSAGES } };
 }
 
 export function emptyConfig(people: Person[]): HouseholdConfig {
-  return { people, bins: [...TEMPLATE_BINS], chores: [] };
+  return { people, bins: [...TEMPLATE_BINS], chores: [], messages: { ...DEFAULT_MESSAGES } };
 }
 
 export function emptyPeriod(period: string): PeriodLogV2 {
