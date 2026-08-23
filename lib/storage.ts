@@ -53,7 +53,7 @@ export function sanitize(raw: unknown): PersistedV2 | null {
             name: str(c.name, `Chore ${i + 1}`),
             icon: typeof c.icon === "string" ? c.icon : null,
             binId: str(c.binId, bins[0]?.id ?? "bin0"),
-            kind: c.kind === "daily" ? ("daily" as const) : ("cycle" as const),
+            kind: c.kind === "daily" ? ("daily" as const) : c.kind === "once" ? ("once" as const) : ("cycle" as const),
             cycleDays,
             greenMax: Math.min(num(c.greenMax, cycleDays), cycleDays),
             yellowMax: Math.min(Math.max(num(c.yellowMax, cycleDays), num(c.greenMax, cycleDays)), cycleDays),

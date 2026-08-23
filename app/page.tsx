@@ -165,6 +165,21 @@ export default function Home() {
   useEffect(() => {
     const data = loadAll();
     if (data) {
+      // One-and-done chores completed on an earlier day disappear for good.
+      const today = todayStr();
+      const stale = new Set(
+        data.config.chores
+          .filter((c) => {
+            if (c.kind !== "once") return false;
+            const st = data.choreState.find((s) => s.id === c.id);
+            return !!st?.lastDoneDate && st.lastDoneDate < today;
+          })
+          .map((c) => c.id)
+      );
+      if (stale.size > 0) {
+        data.config = { ...data.config, chores: data.config.chores.filter((c) => !stale.has(c.id)) };
+        data.choreState = data.choreState.filter((s) => !stale.has(s.id));
+      }
       setConfig(data.config);
       setChores(buildChores(data.config, data));
       setWeekly(data.weekly.period === weekStartStr() ? data.weekly : emptyPeriod(weekStartStr()));
@@ -204,12 +219,22 @@ export default function Home() {
     rolloverDayRef.current = dayKey;
     kierArmed.current = true;
     setKierShown(false);
+    // Completed one-and-done chores leave the board with the old day.
+    const doneOnce = new Set(
+      chores.filter((c) => c.def.kind === "once" && c.done).map((c) => c.def.id)
+    );
+    if (doneOnce.size > 0) {
+      setConfig((prev) => ({ ...prev, chores: prev.chores.filter((c) => !doneOnce.has(c.id)) }));
+    }
     setChores((prev) =>
-      prev.map((c) => {
-        if (c.def.kind === "daily") return { ...c, doneBy: {}, expanded: false };
-        const daysAgo = computeDaysAgo(c.lastDoneDate);
-        return { ...c, daysAgo, done: daysAgo === 0, expanded: false };
-      })
+      prev
+        .filter((c) => !doneOnce.has(c.def.id))
+        .map((c) => {
+          if (c.def.kind === "daily") return { ...c, doneBy: {}, expanded: false };
+          if (c.def.kind === "once") return { ...c, expanded: false };
+          const daysAgo = computeDaysAgo(c.lastDoneDate);
+          return { ...c, daysAgo, done: daysAgo === 0, expanded: false };
+        })
     );
     setWeekly((prev) => (prev.period === weekStartStr() ? prev : emptyPeriod(weekStartStr())));
     const m = monthStr();
@@ -219,6 +244,7 @@ export default function Home() {
       setMonthly(emptyPeriod(m));
       setViewMonth((prev) => (prev === finished.period ? prev : m));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayKey, loaded]);
 
   // Persist the whole household in one atomic blob.
@@ -250,13 +276,19 @@ export default function Home() {
     setChores((prev) =>
       buildChores(next, {
         savedDate: todayStr(),
-        choreState: prev.map((c) => ({
-          id: c.def.id,
-          doneBy: c.doneBy,
-          lastDoneDate: c.lastDoneDate,
-          lastBy: c.lastBy,
-          partsDone: c.partsDone,
-        })),
+        choreState: prev.map((c) => {
+          // A chore switched to one-and-done starts pending — without this it
+          // would inherit the cycle seed date and be born already "done".
+          const nextDef = next.chores.find((d) => d.id === c.def.id);
+          const becameOnce = nextDef?.kind === "once" && c.def.kind !== "once";
+          return {
+            id: c.def.id,
+            doneBy: c.doneBy,
+            lastDoneDate: becameOnce ? null : c.lastDoneDate,
+            lastBy: becameOnce ? null : c.lastBy,
+            partsDone: c.partsDone,
+          };
+        }),
       })
     );
   }
@@ -273,7 +305,7 @@ export default function Home() {
     setChores((prev) =>
       prev.map((c, idx) => {
         if (idx !== i) return { ...c, expanded: false };
-        if (c.def.kind === "cycle" && c.done) return { ...c, expanded: false };
+        if (c.def.kind !== "daily" && c.done) return { ...c, expanded: false };
         return { ...c, expanded: !c.expanded };
       })
     );
@@ -569,7 +601,7 @@ export default function Home() {
                     <div className="cycle-day">
                       {c.done
                         ? <span className="person-chip done" style={pcStyle(lastPerson?.color ?? "#e8f2f8")}>{lastPerson?.name[0]?.toUpperCase() ?? "✓"}</span>
-                        : <span className="day-count">DAY {c.daysAgo}/{c.def.cycleDays}</span>}
+                        : <span className="day-count">{c.def.kind === "once" ? "ONCE" : `DAY ${c.daysAgo}/${c.def.cycleDays}`}</span>}
                     </div>
                     <div className="who-status" style={{
                       color: c.done && lastPerson ? lastPerson.color : "var(--sub)",

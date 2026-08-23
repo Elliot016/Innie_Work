@@ -167,6 +167,10 @@ function ChoreForm({ chore, config, onUpdate, onDone }: { chore: ChoreDefV2; con
             className={`set-btn${chore.kind === "cycle" ? " sel" : ""}`}
             onClick={() => chore.kind !== "cycle" && edit({ kind: "cycle", cycleDays: 7, greenMax: 5, yellowMax: 6 })}
           >CYCLE · ANY ASSIGNEE</button>
+          <button
+            className={`set-btn${chore.kind === "once" ? " sel" : ""}`}
+            onClick={() => edit({ kind: "once", cycleDays: 1, greenMax: 1, yellowMax: 1 })}
+          >ONCE · ONE &amp; DONE</button>
         </div>
       </div>
       {chore.kind === "cycle" && (

@@ -47,6 +47,20 @@ export function buildChores(
           partsDone: [],
         };
       }
+      if (def.kind === "once") {
+        // One-and-done: pending until somebody logs it; no aging.
+        const lastDoneDate = sc?.lastDoneDate ?? null;
+        return {
+          def,
+          expanded: false,
+          doneBy: {},
+          done: lastDoneDate !== null,
+          lastBy: sc?.lastBy ?? null,
+          lastDoneDate,
+          daysAgo: 0,
+          partsDone: (def.parts ?? []).map((_, i) => sc?.partsDone?.[i] ?? false),
+        };
+      }
       // Cycle chores age by days-since-last-done. Unseen chores start at day 1.
       const lastDoneDate = sc?.lastDoneDate ?? dateDaysAgo(1);
       const daysAgo = computeDaysAgo(lastDoneDate);
@@ -70,6 +84,7 @@ export function allPartsDone(c: ChoreState): boolean {
 
 export function getUrgency(c: ChoreState): Urgency {
   if (c.def.kind === "daily") return "green";
+  if (c.def.kind === "once") return "green"; // one-offs don't age
   if (c.done) return "green";
   if (c.daysAgo <= c.def.greenMax) return "green";
   if (c.daysAgo <= c.def.yellowMax) return "yellow";
@@ -91,6 +106,7 @@ export function sinceText(c: ChoreState, people: Person[]): string {
     const by = people.find((p) => p.id === c.lastBy);
     return by ? `done · ${by.name}` : "done today";
   }
+  if (c.def.kind === "once") return "one & done";
   return `${c.daysAgo} of ${c.def.cycleDays} days`;
 }
 
@@ -128,6 +144,10 @@ export function binProgress(
       const assignees = resolveAssignees(c.def, people);
       total += assignees.length;
       done += assignees.filter((p) => c.doneBy[p.id]).length;
+    } else if (c.def.kind === "once") {
+      // Pending work until it's actually logged.
+      total += 1;
+      if (c.done) done += 1;
     } else {
       total += 1;
       if (c.done || c.daysAgo <= c.def.greenMax) done += 1;

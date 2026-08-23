@@ -13,7 +13,9 @@ export interface Bin {
   order: number;
 }
 
-export type ChoreKind = "daily" | "cycle";
+// daily: each assignee logs it every day. cycle: any assignee, repeats on a
+// cadence. once: any assignee, one-and-done — auto-removed the next day.
+export type ChoreKind = "daily" | "cycle" | "once";
 export type Urgency = "green" | "yellow" | "red";
 
 export interface ChoreDefV2 {
