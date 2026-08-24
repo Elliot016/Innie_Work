@@ -388,7 +388,6 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
     });
 
   const scoring = config.scoring;
-  const enabledKinds = Number(scoring.daily) + Number(scoring.cycle) + Number(scoring.once);
   const setScoring = (patch: Partial<ScoringConfig>) =>
     onUpdate((cfg) => ({ ...cfg, scoring: { ...cfg.scoring, ...patch } }));
   const setMessage = (key: keyof HouseholdConfig["messages"], value: string) =>
@@ -454,26 +453,21 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
       </div>
 
       <div className="set-section">
-        {secHead("scoring", "Scoring", `${enabledKinds}/3 · ${scoring.kierThreshold}%`)}
+        {secHead("scoring", "Scoring", `${scoring.countKind.toUpperCase()} · ${scoring.kierThreshold}%`)}
         {openSecs.has("scoring") && (
         <div className="set-form" style={{ paddingTop: 6 }}>
           <div className="set-label">Counts toward the percentage
             <div className="set-toggle">
-              {KIND_OPTIONS.map(({ k, label }) => {
-                const on = scoring[k];
-                const isLast = on && enabledKinds === 1;
-                return (
-                  <button
-                    key={k}
-                    className={`set-btn${on ? " sel" : ""}`}
-                    disabled={isLast}
-                    onClick={() => !isLast && setScoring({ [k]: !on } as Partial<ScoringConfig>)}
-                  >{label}</button>
-                );
-              })}
+              {KIND_OPTIONS.map(({ k, label }) => (
+                <button
+                  key={k}
+                  className={`set-btn${scoring.countKind === k ? " sel" : ""}`}
+                  onClick={() => setScoring({ countKind: k })}
+                >{label}</button>
+              ))}
             </div>
           </div>
-          <div className="set-hint">At least one kind must count. Bins with nothing counted show &mdash;.</div>
+          <div className="set-hint">Pick one. Bins holding none of that kind show &mdash;.</div>
           <label className="set-label">Celebrate at
             <input
               type="number" min={1} max={100}

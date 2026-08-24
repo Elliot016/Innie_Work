@@ -57,18 +57,14 @@ export const DEFAULT_MESSAGES: CelebrationMessages = {
   praiseSub: "You have completed your tasks.",
 };
 
-// Which chore kinds count toward every percentage, plus the celebration edge.
+// Which chore kind counts toward every percentage, plus the celebration edge.
 export interface ScoringConfig {
-  daily: boolean;
-  cycle: boolean;
-  once: boolean;
+  countKind: ChoreKind;
   kierThreshold: number; // whole percent, 1..100
 }
 
 export const DEFAULT_SCORING: ScoringConfig = {
-  daily: true,
-  cycle: true,
-  once: true,
+  countKind: "daily",
   kierThreshold: 100,
 };
 

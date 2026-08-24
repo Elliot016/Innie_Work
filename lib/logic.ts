@@ -135,7 +135,7 @@ export function archiveMonth(done: PeriodLogV2, history: PeriodLogV2[]): PeriodL
 // in good standing (not yet aging) — so 100% means "nothing needs doing".
 // Which kinds count at all is up to the household's scoring config.
 export function countsKind(scoring: ScoringConfig, kind: ChoreKind): boolean {
-  return scoring[kind];
+  return scoring.countKind === kind;
 }
 
 // null = nothing counted here, which renders as "—" rather than a misleading

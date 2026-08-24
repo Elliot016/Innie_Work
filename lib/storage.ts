@@ -2,6 +2,7 @@ import {
   CelebrationMessages,
   ChoreDayState,
   ChoreDefV2,
+  ChoreKind,
   DEFAULT_MESSAGES,
   DEFAULT_SCORING,
   HouseholdConfig,
@@ -87,7 +88,6 @@ export function sanitize(raw: unknown): PersistedV2 | null {
   // A blank title would render an empty banner line; treat it as "unset".
   // Sub-lines may stay blank — they're rendered conditionally.
   const strNE = (v: unknown, fb: string) => (typeof v === "string" && v.trim() !== "" ? v : fb);
-  const bool = (v: unknown, fb: boolean) => (typeof v === "boolean" ? v : fb);
   const messages: CelebrationMessages = {
     completeTitle: strNE(m.completeTitle, DEFAULT_MESSAGES.completeTitle),
     completeTagline: str(m.completeTagline, DEFAULT_MESSAGES.completeTagline),
@@ -95,17 +95,20 @@ export function sanitize(raw: unknown): PersistedV2 | null {
     praiseSub: str(m.praiseSub, DEFAULT_MESSAGES.praiseSub),
   };
   const sc = (cfg.scoring ?? {}) as Record<string, unknown>;
-  let scoring: ScoringConfig = {
-    daily: bool(sc.daily, DEFAULT_SCORING.daily),
-    cycle: bool(sc.cycle, DEFAULT_SCORING.cycle),
-    once: bool(sc.once, DEFAULT_SCORING.once),
+  // Earlier builds stored a boolean per kind; collapse those to the first
+  // kind that was counting so the setting survives the shape change.
+  const legacyKind: ChoreKind | null =
+    sc.daily === true ? "daily" : sc.cycle === true ? "cycle" : sc.once === true ? "once" : null;
+  const rawKind = sc.countKind;
+  const countKind: ChoreKind =
+    rawKind === "daily" || rawKind === "cycle" || rawKind === "once"
+      ? rawKind
+      : legacyKind ?? DEFAULT_SCORING.countKind;
+  const scoring: ScoringConfig = {
+    countKind,
     kierThreshold: Math.min(100, Math.max(1,
       Math.round(num(sc.kierThreshold, DEFAULT_SCORING.kierThreshold)))),
   };
-  // Nothing counted would mean a permanently blank board — count everything.
-  if (!scoring.daily && !scoring.cycle && !scoring.once) {
-    scoring = { ...scoring, daily: true, cycle: true, once: true };
-  }
   const config: HouseholdConfig = { people, bins, chores, messages, scoring };
 
   const period = (v: unknown, fb: string): PeriodLogV2 => {
