@@ -3,11 +3,11 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import DigitField from "./DigitField";
 
-export const SCREENSAVER_NAME = "Purge & Polish Industries"; // CSS uppercases it
+export const SCREENSAVER_NAME = "Purge & Polish Corporation"; // CSS uppercases it
 
 // Glitch cadence (ms). A burst is RGB split + slice tear + flicker, then clean.
-const GLITCH_GAP_MIN = 15_000;
-const GLITCH_GAP_MAX = 40_000;
+const GLITCH_GAP_MIN = 650;
+const GLITCH_GAP_MAX = 1_300;
 const GLITCH_LEN_MIN = 300;
 const GLITCH_LEN_MAX = 600;
 
