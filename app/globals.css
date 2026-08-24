@@ -384,28 +384,6 @@ body {
   letter-spacing: 0.08em; padding-top: 1px; text-transform: uppercase;
 }
 
-/* DONE BANNER */
-.done-banner {
-  margin: 14px 16px 0;
-  background: var(--surface2);
-  border: 1px solid var(--green);
-  outline: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
-  outline-offset: 2px;
-  border-radius: 6px; padding: 14px 18px; text-align: center;
-}
-.done-banner-title {
-  font-family: var(--font-display), 'VT323', monospace;
-  font-size: 1.1rem;
-  color: var(--green); margin-bottom: 4px;
-  letter-spacing: 0.14em; text-transform: uppercase;
-  text-shadow: 0 0 8px color-mix(in srgb, var(--green) 55%, transparent);
-}
-.done-banner-sub { font-size: 0.62rem; color: var(--term-dim); letter-spacing: 0.06em; }
-
-/* PER-PERSON PRAISE BANNER (colored by the person's --pc) */
-.praise-banner { border-color: var(--pc); outline-color: color-mix(in srgb, var(--pc) 35%, transparent); }
-.praise-banner .done-banner-title { color: var(--pc); text-shadow: 0 0 8px color-mix(in srgb, var(--pc) 55%, transparent); }
-
 /* ── OVERVIEW PAGE ── */
 .ov-header {
   padding: 6px 20px 10px;
@@ -614,19 +592,23 @@ body {
 
 /* ── IPAD LANDSCAPE / LARGE SCREEN ── */
 @media (min-width: 1024px) {
+  /* Column layout so the grid can take exactly the height that's left over.
+     `flex: 1 1 auto` without `min-height: 0` means rows share the free space
+     when there is any, and the page falls back to scrolling if a household
+     ever adds more chores than a screen can hold. */
+  .board-page { display: flex; flex-direction: column; padding-bottom: 96px; }
+  .legend { flex: none; padding: 8px 22px 4px; }
+  .bottom-pad { flex: none; height: 8px; }
+
   .board-grid {
+    flex: 1 1 auto;
     grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: minmax(96px, 1fr);
     gap: 16px;
-    padding: 20px 22px 0;
+    padding: 14px 22px 0;
   }
 
-  .task-card { min-height: 148px; padding: 14px 14px 12px; }
-
-  .board-page { padding-bottom: 90px; }
-  .done-banner { margin: 16px 22px 0; }
-  .bottom-pad { height: 48px; }
-
-  .legend { padding: 8px 22px 2px; }
+  .task-card { min-height: 96px; height: 100%; padding: 14px 14px 12px; }
 
   /* Overview: scorecards beside the by-chore table so it fits without scrolling */
   .ov-body {
@@ -888,15 +870,6 @@ body {
 .nav-slot.next { justify-content: flex-start; }
 .ov-header .page-nav { margin-top: 2px; }
 
-/* Per-chore completion banner: same shell as the praise banner, tighter type */
-.chore-banner .done-banner-title { font-size: 0.95rem; }
-.chore-banner .done-banner-sub { text-transform: uppercase; opacity: 0.85; }
-.banner-more {
-  margin: 8px 16px 0; text-align: center;
-  font-size: 0.55rem; letter-spacing: 0.12em;
-  color: var(--term-dim); text-transform: uppercase;
-}
-
 /* Settings helper + warning lines */
 .set-hint {
   font-size: 0.55rem; color: var(--term-dim);
@@ -1070,4 +1043,49 @@ body {
   min-height: 96px; resize: vertical;
   font-size: 0.6rem; line-height: 1.4;
   white-space: pre; overflow: auto;
+}
+
+/* ── COMPLETION TOAST ──
+   A message shown the way the celebration is, in the colour of whoever earned
+   it. Sits under the celebration (110) and the screensaver never coexists with
+   it, since a toast only follows a tap. */
+.toast-ov {
+  position: fixed; inset: 0; z-index: 105;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--term-bg) 82%, transparent);
+  cursor: pointer; padding: 24px;
+  animation: toast-in 0.35s ease both;
+}
+@keyframes toast-in { from { opacity: 0; } to { opacity: 1; } }
+
+.toast-box {
+  --tint: var(--term-line);
+  border: 1px solid var(--tint);
+  outline: 1px solid color-mix(in srgb, var(--tint) 35%, transparent);
+  outline-offset: 4px;
+  border-radius: 10px;
+  padding: 38px 54px; text-align: center;
+  background: var(--term-screen);
+  max-width: min(90vw, 720px);
+  animation: toast-box-in 0.45s ease both;
+}
+@keyframes toast-box-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
+.toast-ov.tinted .toast-box { --tint: var(--pc); }
+
+.toast-title {
+  font-family: var(--font-display), 'VT323', monospace;
+  font-size: clamp(1.6rem, 5vmin, 3rem);
+  line-height: 1.1;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--tint);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--tint) 55%, transparent);
+}
+.toast-sub {
+  margin-top: 12px;
+  font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--term-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-ov, .toast-box { animation: none; }
 }

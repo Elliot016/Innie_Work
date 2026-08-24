@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ChoreState,
   HouseholdConfig,
@@ -39,6 +39,7 @@ import CompleteOverlay from "./components/CompleteOverlay";
 import Onboarding from "./components/Onboarding";
 import SettingsPage from "./components/SettingsPage";
 import Screensaver from "./components/Screensaver";
+import ToastOverlay, { type Toast } from "./components/ToastOverlay";
 import TerminalFrame from "./components/TerminalFrame";
 import { useIdle } from "./hooks/useIdle";
 import { useWakeLock } from "./hooks/useWakeLock";
@@ -48,9 +49,6 @@ const FLIGHT_MS = 2250;        // letter lifetime: scatter, then fall into the b
 const SCATTER_MS = 650;        // scatter phase within FLIGHT_MS
 const REASSEMBLE_DELAY = 2000; // name fades back onto the card after this
 const RETURN_MS = 440;         // length of the reassemble animation
-
-// How many per-chore completion banners to show before collapsing to "+N more".
-const MAX_CHORE_BANNERS = 3;
 
 // Each glyph also throws off a little refined "dust" on its way to the bin.
 const DUST_PER_NAME_GLYPH = 2;
@@ -126,6 +124,10 @@ export default function Home() {
   const [page, setPage] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastSeen = useRef<Set<string>>(new Set());
+  const toastBaseline = useRef(false);
+  const dismissToast = useCallback(() => setToasts((q) => q.slice(1)), []);
   const [celebrateShown, setCelebrateShown] = useState(false);
   const [celebratePct, setCelebratePct] = useState(100);
   const celebrateArmed = useRef(true); // fires once per day, re-armed at rollover
@@ -535,6 +537,51 @@ export default function Home() {
     return mine.length > 0 && mine.every((c) => c.doneBy[p.id]);
   });
 
+  // Completion messages are momentary: enqueue one the moment it becomes true,
+  // rather than parking a banner on the board for as long as it stays true.
+  const toastKeys = [
+    ...choreMsgs.map((m) => `c:${m.choreId}:${m.byName ?? ""}`),
+    ...finishedPeople.map((p) => `p:${p.id}`),
+  ].join("|");
+  useEffect(() => {
+    if (!loaded) return;
+    const sync = () => {
+      const active = new Set<string>();
+      const fresh: Toast[] = [];
+      for (const m of choreMsgs) {
+        const key = `c:${m.choreId}:${m.byName ?? ""}`;
+        active.add(key);
+        if (!toastSeen.current.has(key)) {
+          fresh.push({
+            key,
+            title: m.text,
+            sub: `${m.choreName}${m.byName ? ` · ${m.byName}` : ""}`,
+            color: m.tintColor,
+          });
+        }
+      }
+      for (const p of finishedPeople) {
+        const key = `p:${p.id}`;
+        active.add(key);
+        if (!toastSeen.current.has(key)) {
+          fresh.push({
+            key,
+            title: fillName(config.messages.praiseTitle, p.name),
+            sub: fillName(config.messages.praiseSub, p.name),
+            color: p.color,
+          });
+        }
+      }
+      toastSeen.current = active;
+      // Whatever is already true when the app opens is history, not news.
+      if (!toastBaseline.current) { toastBaseline.current = true; return; }
+      if (fresh.length > 0) setToasts((q) => [...q, ...fresh]);
+    };
+    sync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toastKeys, loaded]);
+
+
   // ── Overview totals
   const personSum = (log: PeriodLogV2, personId: string) =>
     Object.values(log.tallies[personId] ?? {}).reduce((a, b) => a + b, 0);
@@ -736,29 +783,6 @@ export default function Home() {
           })}
         </div>
 
-        {choreMsgs.slice(0, MAX_CHORE_BANNERS).map((m) => (
-          <div
-            key={m.choreId}
-            className={`done-banner chore-banner${m.tintColor ? " praise-banner" : ""}`}
-            style={m.tintColor ? pcStyle(m.tintColor) : undefined}
-          >
-            <div className="done-banner-title">{m.text}</div>
-            <div className="done-banner-sub">{m.choreName}{m.byName ? ` · ${m.byName}` : ""}</div>
-          </div>
-        ))}
-        {choreMsgs.length > MAX_CHORE_BANNERS && (
-          <div className="banner-more">+{choreMsgs.length - MAX_CHORE_BANNERS} more completed</div>
-        )}
-
-        {finishedPeople.map((p) => (
-          <div key={p.id} className="done-banner praise-banner" style={pcStyle(p.color)}>
-            <div className="done-banner-title">{fillName(config.messages.praiseTitle, p.name)}</div>
-            {config.messages.praiseSub.trim() !== "" && (
-              <div className="done-banner-sub">{fillName(config.messages.praiseSub, p.name)}</div>
-            )}
-          </div>
-        ))}
-
         <div className="bottom-pad" />
       </div>
 
@@ -877,6 +901,12 @@ export default function Home() {
       title={config.messages.completeTitle}
       tagline={config.messages.completeTagline}
       onDismiss={() => setCelebrateShown(false)}
+    />
+    {/* A toast waits its turn rather than expiring unseen under the
+        celebration, the screensaver, or onboarding. */}
+    <ToastOverlay
+      toast={celebrateShown || saverShown || needsOnboarding ? null : toasts[0] ?? null}
+      onDismiss={dismissToast}
     />
     <Screensaver show={saverShown} onDismiss={wake} />
 
