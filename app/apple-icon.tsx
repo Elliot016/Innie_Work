@@ -3,7 +3,7 @@ import { ImageResponse } from "next/og";
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
-// Home-screen icon: a yellow person silhouette on the Lumon-dark background.
+// Home-screen icon: a yellow person silhouette on the terminal-dark background.
 export default function AppleIcon() {
   return new ImageResponse(
     (

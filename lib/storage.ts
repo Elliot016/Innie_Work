@@ -13,6 +13,7 @@ import {
   PeriodLogV2,
   PersistedV2,
   Person,
+  LEGACY_KEY_V2,
   STORAGE_KEY_V2,
   emptyPeriod,
 } from "./model";
@@ -108,8 +109,8 @@ export function sanitize(raw: unknown): PersistedV2 | null {
       : legacyKind ?? DEFAULT_SCORING.countKind;
   const scoring: ScoringConfig = {
     countKind,
-    kierThreshold: Math.min(100, Math.max(1,
-      Math.round(num(sc.kierThreshold, DEFAULT_SCORING.kierThreshold)))),
+    celebrateAt: Math.min(100, Math.max(1,
+      Math.round(num(sc.celebrateAt, DEFAULT_SCORING.celebrateAt)))),
   };
   const dp = (cfg.display ?? {}) as Record<string, unknown>;
   const display: DisplayConfig = {
@@ -171,7 +172,7 @@ function periodHasData(p: PeriodLogV2): boolean {
 // v2 blob → sanitize; else migrate v1 keys; else null (true first run).
 export function loadAll(): PersistedV2 | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_V2);
+    const raw = localStorage.getItem(STORAGE_KEY_V2) ?? localStorage.getItem(LEGACY_KEY_V2);
     if (raw) {
       const clean = sanitize(JSON.parse(raw));
       if (clean) return clean;

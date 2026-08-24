@@ -13,6 +13,7 @@ import {
   MAX_MESSAGE_LEN,
   Person,
   ScoringConfig,
+  LEGACY_KEY_V2,
   STORAGE_KEY_V2,
 } from "@/lib/model";
 
@@ -336,7 +337,7 @@ function DataSection({ open, head }: { open: boolean; head: React.ReactNode }) {
   const [armed, setArmed] = useState(false);
 
   const currentBlob = () => {
-    try { return localStorage.getItem(STORAGE_KEY_V2) ?? ""; } catch { return ""; }
+    try { return localStorage.getItem(STORAGE_KEY_V2) ?? localStorage.getItem(LEGACY_KEY_V2) ?? ""; } catch { return ""; }
   };
 
   const summary = (raw: string) => {
@@ -543,7 +544,7 @@ export default function SettingsPage({
       </div>
 
       <div className="set-section">
-        {secHead("scoring", "Scoring", `${scoring.countKind.toUpperCase()} · ${scoring.kierThreshold}%`)}
+        {secHead("scoring", "Scoring", `${scoring.countKind.toUpperCase()} · ${scoring.celebrateAt}%`)}
         {openSecs.has("scoring") && (
         <div className="set-form" style={{ paddingTop: 6 }}>
           <div className="set-label">Counts toward the percentage
@@ -562,10 +563,10 @@ export default function SettingsPage({
             <input
               type="number" min={1} max={100}
               className="set-input narrow"
-              value={scoring.kierThreshold}
+              value={scoring.celebrateAt}
               onChange={(e) => {
                 const n = parseInt(e.target.value, 10);
-                setScoring({ kierThreshold: isNaN(n) ? scoring.kierThreshold : Math.min(100, Math.max(1, n)) });
+                setScoring({ celebrateAt: isNaN(n) ? scoring.celebrateAt : Math.min(100, Math.max(1, n)) });
               }}
             /> %
           </label>
@@ -575,7 +576,7 @@ export default function SettingsPage({
       </div>
 
       <div className="set-section">
-        {secHead("messages", "Messages", `${scoring.kierThreshold}%`)}
+        {secHead("messages", "Messages", `${scoring.celebrateAt}%`)}
         {openSecs.has("messages") && (
         <div className="set-form" style={{ paddingTop: 6 }}>
           <label className="set-label">Celebration title

@@ -52,20 +52,20 @@ export interface CelebrationMessages {
 
 export const DEFAULT_MESSAGES: CelebrationMessages = {
   completeTitle: "Purification Complete",
-  completeTagline: "Your Outties are Happy",
-  praiseTitle: "Good Job, Innie {name}!",
+  completeTagline: "Management Is Pleased",
+  praiseTitle: "Good Job, {name}!",
   praiseSub: "You have completed your tasks.",
 };
 
 // Which chore kind counts toward every percentage, plus the celebration edge.
 export interface ScoringConfig {
   countKind: ChoreKind;
-  kierThreshold: number; // whole percent, 1..100
+  celebrateAt: number; // whole percent, 1..100
 }
 
 export const DEFAULT_SCORING: ScoringConfig = {
   countKind: "daily",
-  kierThreshold: 100,
+  celebrateAt: 100,
 };
 
 // Idle screensaver. 0 = never.
@@ -124,7 +124,10 @@ export interface ChoreState {
 }
 
 // ── Constants
-export const STORAGE_KEY_V2 = "inniework:v2";
+export const STORAGE_KEY_V2 = "pnp:v2";
+// The key this app shipped under before the rename. Still read on load so an
+// existing board survives; the first save moves it to STORAGE_KEY_V2.
+export const LEGACY_KEY_V2 = "inniework:v2";
 export const MAX_HISTORY = 36;
 
 export const DEFAULT_PALETTE = [

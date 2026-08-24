@@ -45,9 +45,9 @@ export default function TerminalFrame({
         <div className="term-date">{dateStr}</div>
         <div className="term-pct">{shown}% COMPLETE</div>
         <div className="term-logo" aria-hidden>
-          {/* The Innie House atom */}
+          {/* The house atom logo */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/innie-house.png" alt="" className="term-logo-img" />
+          <img src="/pp-atom.png" alt="" className="term-logo-img" />
         </div>
       </header>
       <div className="term-hex" aria-hidden>0x137056 : 0x09B32E</div>

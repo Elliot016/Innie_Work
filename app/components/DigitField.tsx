@@ -10,7 +10,7 @@ interface Digit {
   delay: number;
 }
 
-// The ambient MDR number field: faint digits scattered behind the board, a
+// The ambient number field: faint digits scattered behind the board, a
 // few of which slowly lurk. Seeded in an effect (never during render) so the
 // server and client markup always match.
 export default function DigitField() {

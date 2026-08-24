@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* ── MDR TERMINAL THEME ──
+/* ── TERMINAL THEME ──
    White-with-a-blue-tint phosphor on dark navy, everything drawn as
    outlined boxes behind a scanlined CRT frame. */
 :root {
@@ -108,7 +108,7 @@ body {
   pointer-events: none;
 }
 
-/* ── AMBIENT MDR DIGITS ── */
+/* ── AMBIENT DIGITS ── */
 .digit-field {
   position: fixed;
   inset: 0;
@@ -264,9 +264,9 @@ body {
 }
 /* Name is "refined" away while its letters fly to the bin, then reassembles. */
 .card-since { transition: opacity 0.15s, filter 0.15s; }
-.card-name.name-refined, .card-since.name-refined { opacity: 0; filter: blur(2px); }
-.card-name.name-return,  .card-since.name-return  { animation: mdr-reassemble 0.35s ease-out; }
-@keyframes mdr-reassemble {
+.card-name.name-hidden, .card-since.name-hidden { opacity: 0; filter: blur(2px); }
+.card-name.name-return,  .card-since.name-return  { animation: text-reassemble 0.35s ease-out; }
+@keyframes text-reassemble {
   from { opacity: 0; letter-spacing: 0.2em; filter: blur(2px); }
   to   { filter: none; }
 }
@@ -526,15 +526,15 @@ body {
 .board-page { padding-bottom: 150px; }
 @media (max-width: 700px) { .board-page { padding-bottom: 270px; } }
 
-/* ── MDR (macrodata refinement) LAYER ── */
-.mdr-layer {
+/* ── COMPLETION FLIGHT LAYER ── */
+.flight-layer {
   position: fixed; inset: 0;
   pointer-events: none; z-index: 50;
   transition: opacity 0.25s ease;
 }
-.mdr-layer.mdr-hidden { opacity: 0; }
+.flight-layer.flight-hidden { opacity: 0; }
 
-.mdr-piece {
+.flight-piece {
   position: absolute; display: block;
   font-family: var(--font-display), 'VT323', monospace;
   font-size: 1.15rem; font-weight: 400; line-height: 1.1;
@@ -543,10 +543,10 @@ body {
   will-change: transform, opacity;
   text-shadow: 0 0 6px currentColor;
 }
-.mdr-piece.mdr-sub { font-size: 0.58rem; letter-spacing: 0.1em; text-shadow: 0 0 4px currentColor; }
+.flight-piece.flight-sub { font-size: 0.58rem; letter-spacing: 0.1em; text-shadow: 0 0 4px currentColor; }
 /* Dust: the smaller particles each glyph throws off on its way to the bin */
-.mdr-piece.mdr-dust { font-size: 0.55rem; opacity: 0.75; text-shadow: 0 0 5px currentColor; }
-.mdr-piece.mdr-sub.mdr-dust { font-size: 0.45rem; }
+.flight-piece.flight-dust { font-size: 0.55rem; opacity: 0.75; text-shadow: 0 0 5px currentColor; }
+.flight-piece.flight-sub.flight-dust { font-size: 0.45rem; }
 
 .bin-dock {
   position: absolute; left: 14px; right: 14px;
@@ -560,17 +560,17 @@ body {
 }
 .bin.receiving { filter: drop-shadow(0 0 12px rgba(180, 220, 255, 0.5)); }
 /* Lid is two doors that split down the middle and swing up from their outer hinges. */
-.mdr-lid { display: flex; height: 8px; }
-.mdr-door {
+.bin-lid { display: flex; height: 8px; }
+.bin-door {
   flex: 1; height: 100%;
   border: 1px solid var(--term-line); border-bottom: none;
   background: var(--term-bg);
   transition: transform 0.22s ease-out;
 }
-.mdr-door-l { transform-origin: left bottom;  border-right-width: 0.5px; }
-.mdr-door-r { transform-origin: right bottom; border-left-width: 0.5px; }
-.bin.open .mdr-door-l { transform: rotate(-55deg); }
-.bin.open .mdr-door-r { transform: rotate(55deg); }
+.bin-door-l { transform-origin: left bottom;  border-right-width: 0.5px; }
+.bin-door-r { transform-origin: right bottom; border-left-width: 0.5px; }
+.bin.open .bin-door-l { transform: rotate(-55deg); }
+.bin.open .bin-door-r { transform: rotate(55deg); }
 .bin-tag {
   border: 1px solid var(--term-line); border-bottom: none; background: var(--term-screen);
   padding: 4px 8px 2px;
@@ -604,12 +604,12 @@ body {
     border-color: var(--red);
     box-shadow: inset 0 0 18px 1px rgba(224, 112, 112, 0.14);
   }
-  .mdr-piece { display: none; }
+  .flight-piece { display: none; }
   .digit-field { display: none; }
   .scanlines::after { display: none; }
   .card-name, .card-since, .card-name.name-return, .card-since.name-return { animation: none; transition: none; }
-  .card-name.name-refined, .card-since.name-refined { opacity: 1; filter: none; }
-  .mdr-door { transition: none; }
+  .card-name.name-hidden, .card-since.name-hidden { opacity: 1; filter: none; }
+  .bin-door { transition: none; }
 }
 
 /* ── IPAD LANDSCAPE / LARGE SCREEN ── */
@@ -797,15 +797,15 @@ body {
   .onboard-box { animation: none; }
 }
 
-/* ── KIER OVERLAY (100%) ── */
-.kier {
+/* ── CELEBRATION OVERLAY ── */
+.complete-ov {
   position: fixed; inset: 0; z-index: 110;
   display: flex; align-items: center; justify-content: center;
   background: color-mix(in srgb, var(--term-bg) 90%, transparent);
   cursor: pointer;
   padding: 20px;
 }
-.kier-box {
+.complete-box {
   border: 1px solid var(--term-line);
   outline: 1px solid var(--term-line-soft);
   outline-offset: 4px;
@@ -813,30 +813,30 @@ body {
   padding: 42px 56px;
   text-align: center;
   background: var(--term-screen);
-  animation: kier-in 0.5s ease both;
+  animation: complete-in 0.5s ease both;
 }
-@keyframes kier-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
-.k-t1 {
+@keyframes complete-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+.co-t1 {
   font-size: 0.8rem; letter-spacing: 0.4em; color: var(--term-dim);
   text-transform: uppercase;
 }
-.k-t2 {
+.co-t2 {
   font-family: var(--font-display), 'VT323', monospace;
   font-size: 4.5rem;
   text-shadow: 0 0 18px rgba(180, 220, 255, 0.9);
   margin: 8px 0;
 }
-.k-t3 {
+.co-t3 {
   font-family: var(--font-display), 'VT323', monospace;
   font-size: 1.4rem; letter-spacing: 0.5em; text-transform: uppercase;
   text-shadow: var(--term-glow);
 }
-.k-t4 {
+.co-t4 {
   font-size: 0.55rem; letter-spacing: 0.2em; color: var(--term-dim);
   margin-top: 24px; text-transform: uppercase;
 }
 @media (prefers-reduced-motion: reduce) {
-  .kier-box { animation: none; }
+  .complete-box { animation: none; }
 }
 
 /* Form footer: confirm-and-collapse next to delete */
@@ -851,7 +851,7 @@ body {
 }
 .set-btn.done:active { background: color-mix(in srgb, var(--green) 25%, transparent); }
 
-/* Header logo: the Innie House atom, inverted to phosphor white on navy */
+/* Header logo: the house atom, inverted to phosphor white on navy */
 .term-logo-img {
   height: 38px;
   width: auto;
@@ -905,7 +905,7 @@ body {
 
 /* ── SCREENSAVER (idle) ──
    Above the CRT frame (80) and scanlines (85) so the bright fixed border is
-   off the panel all night; below Onboarding (100) and Kier (110), which it
+   off the panel all night; below Onboarding (100) and the celebration (110), which it
    never renders over anyway. Must be a direct child of .clip-wrap — that
    element is position:fixed and so owns the stacking context all these
    z-indices are compared in. The overlay is fully opaque on purpose: the
@@ -969,8 +969,8 @@ body {
 
 .ss-face, .ss-glitch, .ss-tear {
   position: absolute; inset: 0;
-  -webkit-mask: url(/innie-house.png) center / contain no-repeat;
-          mask: url(/innie-house.png) center / contain no-repeat;
+  -webkit-mask: url(/pp-atom.png) center / contain no-repeat;
+          mask: url(/pp-atom.png) center / contain no-repeat;
 }
 .ss-face {
   background: rgba(232, 242, 248, 0.62);   /* phosphor white, held well under full */

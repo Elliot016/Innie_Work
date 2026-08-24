@@ -17,12 +17,12 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Your Innie Duties",
-  description: "Lumon Home Division",
+  title: "Purge & Polish Industries",
+  description: "Household Operations Terminal",
   // Makes "Add to Home Screen" launch fullscreen like a native app.
   appleWebApp: {
     capable: true,
-    title: "Innie Work",
+    title: "Purge & Polish",
     statusBarStyle: "black-translucent",
   },
 };

@@ -35,7 +35,7 @@ import {
 } from "@/lib/logic";
 import { loadAll, saveAll } from "@/lib/storage";
 import DigitField from "./components/DigitField";
-import KierOverlay from "./components/KierOverlay";
+import CompleteOverlay from "./components/CompleteOverlay";
 import Onboarding from "./components/Onboarding";
 import SettingsPage from "./components/SettingsPage";
 import Screensaver from "./components/Screensaver";
@@ -43,7 +43,7 @@ import TerminalFrame from "./components/TerminalFrame";
 import { useIdle } from "./hooks/useIdle";
 import { useWakeLock } from "./hooks/useWakeLock";
 
-// MDR ("macrodata refinement") bin animation timing
+// Completion-flight animation timing
 const FLIGHT_MS = 2250;        // letter lifetime: scatter, then fall into the bin
 const SCATTER_MS = 650;        // scatter phase within FLIGHT_MS
 const REASSEMBLE_DELAY = 2000; // name fades back onto the card after this
@@ -126,15 +126,15 @@ export default function Home() {
   const [page, setPage] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
-  const [kierShown, setKierShown] = useState(false);
-  const [kierPct, setKierPct] = useState(100);
-  const kierArmed = useRef(true); // fires once per day, re-armed at rollover
+  const [celebrateShown, setCelebrateShown] = useState(false);
+  const [celebratePct, setCelebratePct] = useState(100);
+  const celebrateArmed = useRef(true); // fires once per day, re-armed at rollover
   const [dayKey, setDayKey] = useState(() => todayStr());
   const pagesRef = useRef<HTMLDivElement>(null);
 
   const people = config.people;
 
-  // ── MDR bin animation state
+  // ── completion-flight animation state
   const [flights, setFlights] = useState<Flight[]>([]);
   const [hiddenNames, setHiddenNames] = useState<Set<number>>(() => new Set());
   const [returningNames, setReturningNames] = useState<Set<number>>(() => new Set());
@@ -178,7 +178,7 @@ export default function Home() {
   }
 
   function nameClass(i: number) {
-    if (hiddenNames.has(i)) return " name-refined";
+    if (hiddenNames.has(i)) return " name-hidden";
     if (returningNames.has(i)) return " name-return";
     return "";
   }
@@ -244,7 +244,7 @@ export default function Home() {
   // counts as activity.
   const { idle, wake, sleep } = useIdle(config.display.screensaverMin * 60_000);
   useWakeLock(true);
-  const saverShown = idle && loaded && !needsOnboarding && !kierShown;
+  const saverShown = idle && loaded && !needsOnboarding && !celebrateShown;
 
   // Latest monthly tally, readable from the rollover effect without re-running it.
   const monthlyRef = useRef(monthly);
@@ -256,8 +256,8 @@ export default function Home() {
     if (!loaded) return;
     if (rolloverDayRef.current === dayKey) return;
     rolloverDayRef.current = dayKey;
-    kierArmed.current = true;
-    setKierShown(false);
+    celebrateArmed.current = true;
+    setCelebrateShown(false);
     // Completed one-and-done chores leave the board with the old day.
     const doneOnce = new Set(
       chores.filter((c) => c.def.kind === "once" && c.done).map((c) => c.def.id)
@@ -498,36 +498,36 @@ export default function Home() {
 
   // The celebration fires once per day, when the percentage crosses up into
   // the household's threshold — after the last letters have landed.
-  const kierPctRef = useRef(overall);
-  useEffect(() => { kierPctRef.current = overall; });
+  const celebratePctRef = useRef(overall);
+  useEffect(() => { celebratePctRef.current = overall; });
   const prevExactRef = useRef<number | null>(exact);
-  const kierBaselineSet = useRef(false);
-  const kierCfgRef = useRef(config);
+  const celebrateBaselineSet = useRef(false);
+  const celebrateCfgRef = useRef(config);
   useEffect(() => {
     if (!loaded) return;
     // First run after load is the baseline, not an edge — otherwise opening
     // the app while already complete replays the overlay.
-    if (!kierBaselineSet.current) {
-      kierBaselineSet.current = true;
+    if (!celebrateBaselineSet.current) {
+      celebrateBaselineSet.current = true;
       prevExactRef.current = exact;
-      kierCfgRef.current = config;
+      celebrateCfgRef.current = config;
       return;
     }
     // A settings edit (scoring, threshold, adding/deleting chores) can move the
     // number without anyone doing work — rebaseline instead of celebrating.
-    if (kierCfgRef.current !== config) {
-      kierCfgRef.current = config;
+    if (celebrateCfgRef.current !== config) {
+      celebrateCfgRef.current = config;
       prevExactRef.current = exact;
       return;
     }
     const prev = prevExactRef.current;
     prevExactRef.current = exact;
-    if (!kierArmed.current) return;
+    if (!celebrateArmed.current) return;
     if (exact === null || prev === null) return; // nothing counted
-    const t = config.scoring.kierThreshold;
+    const t = config.scoring.celebrateAt;
     if (prev >= t || exact < t) return;          // not an upward crossing
-    kierArmed.current = false;
-    later(() => { setKierPct(kierPctRef.current); setKierShown(true); }, FLIGHT_MS + 400);
+    celebrateArmed.current = false;
+    later(() => { setCelebratePct(celebratePctRef.current); setCelebrateShown(true); }, FLIGHT_MS + 400);
   }, [exact, loaded, config]);
   // People who have finished every daily chore assigned to them.
   const finishedPeople = people.filter((p) => {
@@ -871,22 +871,22 @@ export default function Home() {
     </div>
 
     {needsOnboarding && <Onboarding onComplete={completeOnboarding} />}
-    <KierOverlay
-      show={kierShown}
-      pct={kierPct}
+    <CompleteOverlay
+      show={celebrateShown}
+      pct={celebratePct}
       title={config.messages.completeTitle}
       tagline={config.messages.completeTagline}
-      onDismiss={() => setKierShown(false)}
+      onDismiss={() => setCelebrateShown(false)}
     />
     <Screensaver show={saverShown} onDismiss={wake} />
 
-    {/* ── MDR LAYER: flying letters + the bin ── */}
-    <div className={`mdr-layer${page === 0 ? "" : " mdr-hidden"}`} aria-hidden>
+    {/* ── FLIGHT LAYER: flying letters + the bins ── */}
+    <div className={`flight-layer${page === 0 ? "" : " flight-hidden"}`} aria-hidden>
       {flights.map((f) =>
         f.pieces.map((p, k) => (
           <span
             key={`${f.id}-${k}`}
-            className={`mdr-piece${p.sub ? " mdr-sub" : ""}${p.dust ? " mdr-dust" : ""}`}
+            className={`flight-piece${p.sub ? " flight-sub" : ""}${p.dust ? " flight-dust" : ""}`}
             style={{ left: p.x, top: p.y, width: p.w, height: p.h, color: f.color }}
             ref={(el) => animatePiece(el, p)}
           >{p.ch}</span>
@@ -904,9 +904,9 @@ export default function Home() {
               ref={(el) => { if (el) binRefs.current.set(b.id, el); else binRefs.current.delete(b.id); }}
               className={`bin${openBins.has(b.id) ? " open" : ""}${receivingBins.has(b.id) ? " receiving" : ""}`}
             >
-              <div className="mdr-lid">
-                <div className="mdr-door mdr-door-l" />
-                <div className="mdr-door mdr-door-r" />
+              <div className="bin-lid">
+                <div className="bin-door bin-door-l" />
+                <div className="bin-door bin-door-r" />
               </div>
               <div className="bin-tag">
                 <span className="bin-num">{b.num}</span>
