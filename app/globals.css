@@ -386,7 +386,7 @@ body {
 
 /* DONE BANNER */
 .done-banner {
-  margin: 12px 16px 0;
+  margin: 14px 16px 0;
   background: var(--surface2);
   border: 1px solid var(--green);
   outline: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
@@ -523,8 +523,8 @@ body {
 
 .bottom-pad { height: 40px; }
 /* Board needs room for the fixed bin dock (taller when it wraps to 2 columns). */
-.board-page { padding-bottom: 150px; }
-@media (max-width: 700px) { .board-page { padding-bottom: 270px; } }
+.board-page { padding-bottom: 130px; }
+@media (max-width: 700px) { .board-page { padding-bottom: 280px; } }
 
 /* ── COMPLETION FLIGHT LAYER ── */
 .flight-layer {
@@ -615,14 +615,18 @@ body {
 /* ── IPAD LANDSCAPE / LARGE SCREEN ── */
 @media (min-width: 1024px) {
   .board-grid {
-    grid-template-columns: repeat(5, 1fr);
-    gap: 12px;
-    padding: 24px 16px 0;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    padding: 20px 22px 0;
   }
 
-  .task-card { min-height: 150px; }
+  .task-card { min-height: 148px; padding: 14px 14px 12px; }
 
-  .legend { padding: 8px 16px 2px; }
+  .board-page { padding-bottom: 90px; }
+  .done-banner { margin: 16px 22px 0; }
+  .bottom-pad { height: 48px; }
+
+  .legend { padding: 8px 22px 2px; }
 
   /* Overview: scorecards beside the by-chore table so it fits without scrolling */
   .ov-body {
@@ -901,6 +905,11 @@ body {
 .set-warn {
   font-size: 0.55rem; color: var(--yellow);
   letter-spacing: 0.08em; line-height: 1.5;
+}
+
+/* Five across only where a card still gets real width. */
+@media (min-width: 1366px) {
+  .board-grid { grid-template-columns: repeat(5, 1fr); }
 }
 
 /* ── SCREENSAVER (idle) ──
