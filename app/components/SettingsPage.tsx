@@ -11,7 +11,7 @@ import {
   HouseholdConfig,
   MAX_MESSAGE_LEN,
   Person,
-  ScoreKind,
+  ChoreKind,
   ScoringConfig,
   LEGACY_KEY_V2,
   STORAGE_KEY_V2,
@@ -21,8 +21,7 @@ type Mutate = (mutate: (cfg: HouseholdConfig) => HouseholdConfig) => void;
 
 const pc = (color: string) => ({ "--pc": color } as CSSProperties);
 
-const KIND_OPTIONS: { k: ScoreKind; label: string }[] = [
-  { k: "all", label: "ALL" },
+const KIND_OPTIONS: { k: ChoreKind; label: string }[] = [
   { k: "daily", label: "DAILY" },
   { k: "cycle", label: "CYCLE" },
   { k: "once", label: "ONCE" },
@@ -120,6 +119,21 @@ function BinForm({ bin, config, onUpdate, onDone }: { bin: Bin; config: Househol
       <label className="set-label">Label
         <input className="set-input" value={bin.label} onChange={(e) => edit({ label: e.target.value.toUpperCase() })} />
       </label>
+      <label className="set-label">Message when cleared (optional)
+        <input
+          className="set-input"
+          maxLength={MAX_MESSAGE_LEN}
+          value={bin.message ?? ""}
+          placeholder="e.g. The pets are content"
+          onChange={(e) => {
+            const v = e.target.value;
+            edit({ message: v.trim() === "" ? undefined : v });
+          }}
+        />
+      </label>
+      <div className="set-hint">
+        Shown in caps, in the colour of whoever finishes the bin, when everything in it is done.
+      </div>
       <div className="set-form-actions">
         <button className="set-btn done" onClick={onDone}>✓ DONE</button>
         {config.bins.length > 1 && (
@@ -559,7 +573,7 @@ export default function SettingsPage({
               ))}
             </div>
           </div>
-          <div className="set-hint">Pick one. Bins holding none of that kind show &mdash;.</div>
+          <div className="set-hint">Drives the top percentage only. Each bin always shows its own progress.</div>
           <label className="set-label">Celebrate at
             <input
               type="number" min={1} max={100}

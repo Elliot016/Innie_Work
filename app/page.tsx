@@ -127,6 +127,12 @@ export default function Home() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastSeen = useRef<Set<string>>(new Set());
   const toastBaseline = useRef(false);
+  // Whose tap last landed in which bin — that's who a "bin cleared" message
+  // is credited to, and whose colour it borrows.
+  const lastActor = useRef<{ person: Person; binId: string } | null>(null);
+  const prevBinPct = useRef<Map<string, number | null>>(new Map());
+  const binBaseline = useRef(false);
+  const binCfgRef = useRef<HouseholdConfig | null>(null);
   const dismissToast = useCallback(() => setToasts((q) => q.slice(1)), []);
   const [celebrateShown, setCelebrateShown] = useState(false);
   const [celebratePct, setCelebratePct] = useState(100);
@@ -393,7 +399,7 @@ export default function Home() {
     const id = ++flightId.current;
     // Hold this bin's gauge at its pre-log value until the letters land.
     const binDef = config.bins.find((bb) => bb.id === binId);
-    const held = binDef ? binPct(binDef, chores, people, config.scoring) : null;
+    const held = binDef ? binPct(binDef, chores, people) : null;
     setFrozenPct((m) => new Map(m).set(binId, held));
     setFlights((f) => [...f, { id, binId, color: person.color, pieces }]);
     setHiddenNames((s) => setToggle(s, i, true));
@@ -443,7 +449,7 @@ export default function Home() {
     if (!c) return;
     // Checking on counts toward this month; un-checking (a fix) backs it out.
     const turningOn = !c.doneBy[person.id];
-    if (turningOn) launch(i, person);
+    if (turningOn) { lastActor.current = { person, binId: c.def.binId }; launch(i, person); }
     bump(c.def.id, person.id, turningOn ? 1 : -1);
     setChores((prev) =>
       prev.map((cc, idx) => {
@@ -471,6 +477,7 @@ export default function Home() {
     if (!c) return;
     // A chore with sub-tasks isn't done until every one of them is ticked.
     if (!allPartsDone(c)) return;
+    lastActor.current = { person, binId: c.def.binId };
     launch(i, person);
     const today = todayStr();
     bump(c.def.id, person.id, 1);
@@ -497,6 +504,42 @@ export default function Home() {
   // Unrounded, so a 99.5% board can't trip a 100% threshold.
   const exact = overallExactPct(config.bins, chores, people, config.scoring);
   const choreMsgs = activeChoreMessages(chores, people);
+
+  // A bin's message fires the moment that bin goes clear. Same edge-detection
+  // shape as the celebration: baseline the first pass, and treat a settings
+  // edit as a rebaseline rather than an achievement.
+  const binPcts = config.bins.map((b) => ({ bin: b, pct: binPct(b, chores, people) }));
+  const binPctKey = binPcts.map(({ bin, pct }) => `${bin.id}:${pct}`).join("|");
+  useEffect(() => {
+    if (!loaded) return;
+    const sync = () => {
+      const next = new Map<string, number | null>();
+      const fresh: Toast[] = [];
+      const rebaseline = !binBaseline.current || binCfgRef.current !== config;
+      for (const { bin, pct } of binPcts) {
+        next.set(bin.id, pct);
+        if (rebaseline) continue;
+        const prev = prevBinPct.current.get(bin.id);
+        const msg = (bin.message ?? "").trim();
+        if (!msg) continue;
+        if (prev === undefined || prev === null || prev >= 100) continue;
+        if (pct !== 100) continue;
+        const actor = lastActor.current?.binId === bin.id ? lastActor.current.person : null;
+        fresh.push({
+          key: `b:${bin.id}`,
+          title: msg,
+          sub: `${bin.num} ${bin.label}`,
+          color: actor ? actor.color : null,
+        });
+      }
+      prevBinPct.current = next;
+      binBaseline.current = true;
+      binCfgRef.current = config;
+      if (fresh.length > 0) setToasts((q) => [...q, ...fresh]);
+    };
+    sync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [binPctKey, loaded, config]);
 
   // The celebration fires once per day, when the percentage crosses up into
   // the household's threshold — after the last letters have landed.
@@ -927,7 +970,7 @@ export default function Home() {
           // `.has()` not `??` — null is now a meaningful frozen value.
           const shown = frozenPct.has(b.id)
             ? frozenPct.get(b.id)!
-            : binPct(b, chores, people, config.scoring);
+            : binPct(b, chores, people);
           return (
             <div
               key={b.id}

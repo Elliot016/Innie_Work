@@ -11,6 +11,8 @@ export interface Bin {
   num: string;   // "01"
   label: string; // "DAILY"
   order: number;
+  // One short line shown when every chore in this bin is done. Blank = none.
+  message?: string;
 }
 
 // daily: each assignee logs it every day. cycle: any assignee, repeats on a
@@ -57,17 +59,15 @@ export const DEFAULT_MESSAGES: CelebrationMessages = {
   praiseSub: "You have completed your tasks.",
 };
 
-// Which chore kind counts toward every percentage, plus the celebration edge.
-// "all" counts every kind, so every bin fills as its own chores are finished.
-export type ScoreKind = ChoreKind | "all";
-
+// Which chore kind drives the header percentage and the celebration edge.
+// Bin gauges deliberately ignore this — each bin always counts its own chores.
 export interface ScoringConfig {
-  countKind: ScoreKind;
+  countKind: ChoreKind;
   celebrateAt: number; // whole percent, 1..100
 }
 
 export const DEFAULT_SCORING: ScoringConfig = {
-  countKind: "all",
+  countKind: "daily",
   celebrateAt: 100,
 };
 

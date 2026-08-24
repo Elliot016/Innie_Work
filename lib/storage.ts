@@ -9,7 +9,6 @@ import {
   DisplayConfig,
   HouseholdConfig,
   MAX_MESSAGE_LEN,
-  ScoreKind,
   ScoringConfig,
   PeriodLogV2,
   PersistedV2,
@@ -49,6 +48,9 @@ export function sanitize(raw: unknown): PersistedV2 | null {
           num: str(b.num, String(i + 1).padStart(2, "0")),
           label: str(b.label, `BIN ${i + 1}`),
           order: num(b.order, i),
+          message: typeof b.message === "string" && b.message.trim() !== ""
+            ? b.message.trim().slice(0, MAX_MESSAGE_LEN)
+            : undefined,
         }))
     : [];
 
@@ -104,8 +106,9 @@ export function sanitize(raw: unknown): PersistedV2 | null {
   const legacyKind: ChoreKind | null =
     sc.daily === true ? "daily" : sc.cycle === true ? "cycle" : sc.once === true ? "once" : null;
   const rawKind = sc.countKind;
-  const countKind: ScoreKind =
-    rawKind === "all" || rawKind === "daily" || rawKind === "cycle" || rawKind === "once"
+  // "all" is no longer a valid choice; boards holding it fall back to the default.
+  const countKind: ChoreKind =
+    rawKind === "daily" || rawKind === "cycle" || rawKind === "once"
       ? rawKind
       : legacyKind ?? DEFAULT_SCORING.countKind;
   const scoring: ScoringConfig = {

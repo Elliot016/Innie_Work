@@ -135,7 +135,21 @@ export function archiveMonth(done: PeriodLogV2, history: PeriodLogV2[]): PeriodL
 // in good standing (not yet aging) — so 100% means "nothing needs doing".
 // Which kinds count at all is up to the household's scoring config.
 export function countsKind(scoring: ScoringConfig, kind: ChoreKind): boolean {
-  return scoring.countKind === "all" || scoring.countKind === kind;
+  return scoring.countKind === kind;
+}
+
+// The unit maths for a single chore, shared by both readouts: a daily chore is
+// one unit per assignee, a cycle or one-off chore is a single unit.
+function unitsOf(c: ChoreState, people: Person[]): { done: number; total: number } {
+  if (c.def.kind === "daily") {
+    const assignees = resolveAssignees(c.def, people);
+    return { total: assignees.length, done: assignees.filter((p) => c.doneBy[p.id]).length };
+  }
+  if (c.def.kind === "once") {
+    // Pending work until it's actually logged.
+    return { total: 1, done: c.done ? 1 : 0 };
+  }
+  return { total: 1, done: c.done || c.daysAgo <= c.def.greenMax ? 1 : 0 };
 }
 
 // null = nothing counted here, which renders as "—" rather than a misleading
@@ -147,49 +161,45 @@ export function pctOf(done: number, total: number): number | null {
   return Math.min(99, Math.round((done / total) * 100));
 }
 
+// A bin always reflects its own contents, whatever kind they are — completing
+// a cycle chore fills its bin even when the header counts only dailies.
 export function binProgress(
   bin: Bin,
   chores: ChoreState[],
-  people: Person[],
-  scoring: ScoringConfig
+  people: Person[]
 ): { done: number; total: number } {
   let done = 0;
   let total = 0;
   for (const c of chores) {
     if (c.def.binId !== bin.id) continue;
-    if (!countsKind(scoring, c.def.kind)) continue;
-    if (c.def.kind === "daily") {
-      const assignees = resolveAssignees(c.def, people);
-      total += assignees.length;
-      done += assignees.filter((p) => c.doneBy[p.id]).length;
-    } else if (c.def.kind === "once") {
-      // Pending work until it's actually logged.
-      total += 1;
-      if (c.done) done += 1;
-    } else {
-      total += 1;
-      if (c.done || c.daysAgo <= c.def.greenMax) done += 1;
-    }
+    const u = unitsOf(c, people);
+    total += u.total;
+    done += u.done;
   }
   return { done, total };
 }
 
 export function binPct(
-  bin: Bin, chores: ChoreState[], people: Person[], scoring: ScoringConfig
+  bin: Bin, chores: ChoreState[], people: Person[]
 ): number | null {
-  const { done, total } = binProgress(bin, chores, people, scoring);
+  const { done, total } = binProgress(bin, chores, people);
   return pctOf(done, total);
 }
 
+// The header, by contrast, counts only the chosen kind — across every chore
+// that lives in a bin.
 export function overallProgress(
   bins: Bin[], chores: ChoreState[], people: Person[], scoring: ScoringConfig
 ): { done: number; total: number } {
+  const binIds = new Set(bins.map((b) => b.id));
   let done = 0;
   let total = 0;
-  for (const b of bins) {
-    const p = binProgress(b, chores, people, scoring);
-    done += p.done;
-    total += p.total;
+  for (const c of chores) {
+    if (!binIds.has(c.def.binId)) continue;
+    if (!countsKind(scoring, c.def.kind)) continue;
+    const u = unitsOf(c, people);
+    total += u.total;
+    done += u.done;
   }
   return { done, total };
 }
