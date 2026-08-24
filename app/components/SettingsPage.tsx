@@ -5,14 +5,23 @@ import {
   Bin,
   BUILT_IN_ICONS,
   ChoreDefV2,
+  ChoreKind,
   DEFAULT_PALETTE,
   HouseholdConfig,
+  MAX_MESSAGE_LEN,
   Person,
+  ScoringConfig,
 } from "@/lib/model";
 
 type Mutate = (mutate: (cfg: HouseholdConfig) => HouseholdConfig) => void;
 
 const pc = (color: string) => ({ "--pc": color } as CSSProperties);
+
+const KIND_OPTIONS: { k: ChoreKind; label: string }[] = [
+  { k: "daily", label: "DAILY" },
+  { k: "cycle", label: "CYCLE" },
+  { k: "once", label: "ONCE" },
+];
 
 function newId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -79,6 +88,8 @@ function PersonForm({ person, config, onUpdate, onDone }: { person: Person; conf
                 chores: cfg.chores.map((ch) => ({
                   ...ch,
                   assignees: ch.assignees.filter((a) => a !== person.id),
+                  // A message aimed at them goes with them.
+                  ...(ch.messageFor === person.id ? { message: undefined, messageFor: undefined } : {}),
                 })),
               }))
             }
@@ -244,6 +255,44 @@ function ChoreForm({ chore, config, onUpdate, onDone }: { chore: ChoreDefV2; con
           }}
         />
       </label>
+      <label className="set-label">Completion message (optional)
+        <input
+          className="set-input"
+          maxLength={MAX_MESSAGE_LEN}
+          value={chore.message ?? ""}
+          placeholder="e.g. Thank you for the dishes"
+          onChange={(e) => {
+            const v = e.target.value;
+            // Clearing the message clears its target too, so none linger.
+            edit(v.trim() === "" ? { message: undefined, messageFor: undefined } : { message: v });
+          }}
+        />
+      </label>
+      {(chore.message ?? "").trim() !== "" && (
+        <>
+          <div className="set-label">Message for
+            <div className="assignee-row">
+              <button
+                className={`set-btn${!chore.messageFor ? " sel" : ""}`}
+                onClick={() => edit({ messageFor: undefined })}
+              >EVERYONE</button>
+              {config.people.map((p) => (
+                <button
+                  key={p.id}
+                  className={`set-btn person${chore.messageFor === p.id ? " sel" : ""}`}
+                  style={pc(p.color)}
+                  onClick={() => edit({ messageFor: p.id })}
+                >{p.name}</button>
+              ))}
+            </div>
+          </div>
+          <div className="set-hint">Shown in caps. {"{name}"} becomes the person&rsquo;s name.</div>
+          {chore.messageFor && chore.kind === "daily" && chore.assignees.length > 0
+            && !chore.assignees.includes(chore.messageFor) && (
+            <div className="set-warn">That person isn&rsquo;t assigned to this chore — the message will never show.</div>
+          )}
+        </>
+      )}
       <div className="set-label">Icon
         <div className="icon-grid">
           <button
@@ -338,6 +387,13 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
       };
     });
 
+  const scoring = config.scoring;
+  const enabledKinds = Number(scoring.daily) + Number(scoring.cycle) + Number(scoring.once);
+  const setScoring = (patch: Partial<ScoringConfig>) =>
+    onUpdate((cfg) => ({ ...cfg, scoring: { ...cfg.scoring, ...patch } }));
+  const setMessage = (key: keyof HouseholdConfig["messages"], value: string) =>
+    onUpdate((cfg) => ({ ...cfg, messages: { ...cfg.messages, [key]: value } }));
+
   const binLabel = (binId: string) => {
     const b = config.bins.find((bb) => bb.id === binId);
     return b ? `${b.num} ${b.label}` : "?";
@@ -398,27 +454,75 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
       </div>
 
       <div className="set-section">
-        {secHead("messages", "Messages", "100%")}
+        {secHead("scoring", "Scoring", `${enabledKinds}/3 · ${scoring.kierThreshold}%`)}
+        {openSecs.has("scoring") && (
+        <div className="set-form" style={{ paddingTop: 6 }}>
+          <div className="set-label">Counts toward the percentage
+            <div className="set-toggle">
+              {KIND_OPTIONS.map(({ k, label }) => {
+                const on = scoring[k];
+                const isLast = on && enabledKinds === 1;
+                return (
+                  <button
+                    key={k}
+                    className={`set-btn${on ? " sel" : ""}`}
+                    disabled={isLast}
+                    onClick={() => !isLast && setScoring({ [k]: !on } as Partial<ScoringConfig>)}
+                  >{label}</button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="set-hint">At least one kind must count. Bins with nothing counted show &mdash;.</div>
+          <label className="set-label">Celebrate at
+            <input
+              type="number" min={1} max={100}
+              className="set-input narrow"
+              value={scoring.kierThreshold}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10);
+                setScoring({ kierThreshold: isNaN(n) ? scoring.kierThreshold : Math.min(100, Math.max(1, n)) });
+              }}
+            /> %
+          </label>
+          <div className="set-hint">Fires once a day, when the board crosses up into that number.</div>
+        </div>
+        )}
+      </div>
+
+      <div className="set-section">
+        {secHead("messages", "Messages", `${scoring.kierThreshold}%`)}
         {openSecs.has("messages") && (
         <div className="set-form" style={{ paddingTop: 6 }}>
-          <label className="set-label">100% title
+          <label className="set-label">Celebration title
             <input
               className="set-input"
               value={config.messages.completeTitle}
-              onChange={(e) =>
-                onUpdate((cfg) => ({ ...cfg, messages: { ...cfg.messages, completeTitle: e.target.value } }))
-              }
+              onChange={(e) => setMessage("completeTitle", e.target.value)}
             />
           </label>
-          <label className="set-label">100% tagline
+          <label className="set-label">Celebration tagline
             <input
               className="set-input"
               value={config.messages.completeTagline}
-              onChange={(e) =>
-                onUpdate((cfg) => ({ ...cfg, messages: { ...cfg.messages, completeTagline: e.target.value } }))
-              }
+              onChange={(e) => setMessage("completeTagline", e.target.value)}
             />
           </label>
+          <label className="set-label">Praise title
+            <input
+              className="set-input"
+              value={config.messages.praiseTitle}
+              onChange={(e) => setMessage("praiseTitle", e.target.value)}
+            />
+          </label>
+          <label className="set-label">Praise subtitle
+            <input
+              className="set-input"
+              value={config.messages.praiseSub}
+              onChange={(e) => setMessage("praiseSub", e.target.value)}
+            />
+          </label>
+          <div className="set-hint">{"{name}"} becomes the person&rsquo;s name. Titles are shown in caps.</div>
         </div>
         )}
       </div>

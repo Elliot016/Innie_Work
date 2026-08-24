@@ -19,12 +19,15 @@ import {
   weekStartStr,
 } from "@/lib/time";
 import {
+  activeChoreMessages,
   allPartsDone,
   archiveMonth,
   binPct,
   buildChores,
   dailyDone,
+  fillName,
   getUrgency,
+  overallExactPct,
   overallPct,
   resolveAssignees,
   sinceClass,
@@ -42,6 +45,9 @@ const FLIGHT_MS = 2250;        // letter lifetime: scatter, then fall into the b
 const SCATTER_MS = 650;        // scatter phase within FLIGHT_MS
 const REASSEMBLE_DELAY = 2000; // name fades back onto the card after this
 const RETURN_MS = 440;         // length of the reassemble animation
+
+// How many per-chore completion banners to show before collapsing to "+N more".
+const MAX_CHORE_BANNERS = 3;
 
 // Each glyph also throws off a little refined "dust" on its way to the bin.
 const DUST_PER_NAME_GLYPH = 2;
@@ -118,6 +124,7 @@ export default function Home() {
   const [loaded, setLoaded] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [kierShown, setKierShown] = useState(false);
+  const [kierPct, setKierPct] = useState(100);
   const kierArmed = useRef(true); // fires once per day, re-armed at rollover
   const [dayKey, setDayKey] = useState(() => todayStr());
   const pagesRef = useRef<HTMLDivElement>(null);
@@ -131,7 +138,7 @@ export default function Home() {
   const [openBins, setOpenBins] = useState<Set<string>>(() => new Set());
   const [receivingBins, setReceivingBins] = useState<Set<string>>(() => new Set());
   // Gauges held at their pre-log value while letters are in the air.
-  const [frozenPct, setFrozenPct] = useState<Map<string, number>>(() => new Map());
+  const [frozenPct, setFrozenPct] = useState<Map<string, number | null>>(() => new Map());
   const flightId = useRef(0);
   const nameRefs = useRef(new Map<number, HTMLDivElement>());
   const sinceRefs = useRef(new Map<number, HTMLDivElement>());
@@ -374,7 +381,7 @@ export default function Home() {
     const id = ++flightId.current;
     // Hold this bin's gauge at its pre-log value until the letters land.
     const binDef = config.bins.find((bb) => bb.id === binId);
-    const held = binDef ? binPct(binDef, chores, people) : 0;
+    const held = binDef ? binPct(binDef, chores, people, config.scoring) : null;
     setFrozenPct((m) => new Map(m).set(binId, held));
     setFlights((f) => [...f, { id, binId, color: person.color, pieces }]);
     setHiddenNames((s) => setToggle(s, i, true));
@@ -475,27 +482,44 @@ export default function Home() {
   // ── Progress
   const dailyChores = chores.filter((c) => c.def.kind === "daily");
   const allDone = dailyChores.length > 0 && dailyChores.every((c) => dailyDone(c, people));
-  const overall = overallPct(config.bins, chores, people);
+  const overall = overallPct(config.bins, chores, people, config.scoring) ?? 0;
+  // Unrounded, so a 99.5% board can't trip a 100% threshold.
+  const exact = overallExactPct(config.bins, chores, people, config.scoring);
+  const choreMsgs = activeChoreMessages(chores, people);
 
-  // Kier appears once per day, edge-triggered on crossing into 100% — after
-  // the last letters have had time to land in their bin.
-  const prevOverallRef = useRef(overall);
+  // The celebration fires once per day, when the percentage crosses up into
+  // the household's threshold — after the last letters have landed.
+  const kierPctRef = useRef(overall);
+  useEffect(() => { kierPctRef.current = overall; });
+  const prevExactRef = useRef<number | null>(exact);
   const kierBaselineSet = useRef(false);
+  const kierCfgRef = useRef(config);
   useEffect(() => {
+    if (!loaded) return;
     // First run after load is the baseline, not an edge — otherwise opening
-    // the app while already at 100% replays the overlay.
-    if (loaded && !kierBaselineSet.current) {
+    // the app while already complete replays the overlay.
+    if (!kierBaselineSet.current) {
       kierBaselineSet.current = true;
-      prevOverallRef.current = overall;
+      prevExactRef.current = exact;
+      kierCfgRef.current = config;
       return;
     }
-    if (loaded && kierArmed.current && prevOverallRef.current < 100 && overall === 100) {
-      kierArmed.current = false;
-      later(() => setKierShown(true), FLIGHT_MS + 400);
+    // A settings edit (scoring, threshold, adding/deleting chores) can move the
+    // number without anyone doing work — rebaseline instead of celebrating.
+    if (kierCfgRef.current !== config) {
+      kierCfgRef.current = config;
+      prevExactRef.current = exact;
+      return;
     }
-    prevOverallRef.current = overall;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overall, loaded]);
+    const prev = prevExactRef.current;
+    prevExactRef.current = exact;
+    if (!kierArmed.current) return;
+    if (exact === null || prev === null) return; // nothing counted
+    const t = config.scoring.kierThreshold;
+    if (prev >= t || exact < t) return;          // not an upward crossing
+    kierArmed.current = false;
+    later(() => { setKierPct(kierPctRef.current); setKierShown(true); }, FLIGHT_MS + 400);
+  }, [exact, loaded, config]);
   // People who have finished every daily chore assigned to them.
   const finishedPeople = people.filter((p) => {
     const mine = dailyChores.filter((c) => resolveAssignees(c.def, people).some((a) => a.id === p.id));
@@ -703,10 +727,26 @@ export default function Home() {
           })}
         </div>
 
+        {choreMsgs.slice(0, MAX_CHORE_BANNERS).map((m) => (
+          <div
+            key={m.choreId}
+            className={`done-banner chore-banner${m.tintColor ? " praise-banner" : ""}`}
+            style={m.tintColor ? pcStyle(m.tintColor) : undefined}
+          >
+            <div className="done-banner-title">{m.text}</div>
+            <div className="done-banner-sub">{m.choreName}{m.byName ? ` · ${m.byName}` : ""}</div>
+          </div>
+        ))}
+        {choreMsgs.length > MAX_CHORE_BANNERS && (
+          <div className="banner-more">+{choreMsgs.length - MAX_CHORE_BANNERS} more completed</div>
+        )}
+
         {!allDone && finishedPeople.map((p) => (
           <div key={p.id} className="done-banner praise-banner" style={pcStyle(p.color)}>
-            <div className="done-banner-title">Good Job, Innie {p.name}!</div>
-            <div className="done-banner-sub">You have completed your tasks.</div>
+            <div className="done-banner-title">{fillName(config.messages.praiseTitle, p.name)}</div>
+            {config.messages.praiseSub.trim() !== "" && (
+              <div className="done-banner-sub">{fillName(config.messages.praiseSub, p.name)}</div>
+            )}
           </div>
         ))}
 
@@ -831,6 +871,7 @@ export default function Home() {
     {needsOnboarding && <Onboarding onComplete={completeOnboarding} />}
     <KierOverlay
       show={kierShown}
+      pct={kierPct}
       title={config.messages.completeTitle}
       tagline={config.messages.completeTagline}
       onDismiss={() => setKierShown(false)}
@@ -850,7 +891,10 @@ export default function Home() {
       )}
       <div className="bin-dock">
         {[...config.bins].sort((a, b) => a.order - b.order).map((b) => {
-          const shown = frozenPct.get(b.id) ?? binPct(b, chores, people);
+          // `.has()` not `??` — null is now a meaningful frozen value.
+          const shown = frozenPct.has(b.id)
+            ? frozenPct.get(b.id)!
+            : binPct(b, chores, people, config.scoring);
           return (
             <div
               key={b.id}
@@ -866,8 +910,8 @@ export default function Home() {
                 <span className="bin-cat">{b.label}</span>
               </div>
               <div className="bin-gauge">
-                <div className="bin-fill" style={{ width: `${shown}%` }} />
-                <div className="bin-val">{shown}%</div>
+                <div className="bin-fill" style={{ width: `${shown ?? 0}%` }} />
+                <div className="bin-val">{shown === null ? "—" : `${shown}%`}</div>
               </div>
             </div>
           );

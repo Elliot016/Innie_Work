@@ -4,11 +4,13 @@
 // household-editable under Manage; tap anywhere to return to work.
 export default function KierOverlay({
   show,
+  pct,
   title,
   tagline,
   onDismiss,
 }: {
   show: boolean;
+  pct: number;
   title: string;
   tagline: string;
   onDismiss: () => void;
@@ -18,7 +20,7 @@ export default function KierOverlay({
     <div className="kier" onClick={onDismiss} role="button" aria-label="Dismiss">
       <div className="kier-box">
         <div className="k-t1">{title}</div>
-        <div className="k-t2">100%</div>
+        <div className="k-t2">{pct}%</div>
         <div className="k-t3">{tagline}</div>
         <div className="k-t4">Tap to Return to Work</div>
       </div>

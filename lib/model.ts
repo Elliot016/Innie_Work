@@ -33,17 +33,43 @@ export interface ChoreDefV2 {
   // people added later. Daily kind: each assignee logs it. Cycle kind: any
   // one assignee completes it.
   assignees: string[];
+  // One short line shown in the board's banner stack when this chore is
+  // completed. Blank/undefined = no message.
+  message?: string;
+  // Who the message is about: a personId, or undefined/"" for everyone.
+  messageFor?: string;
 }
 
-// Copy shown on the 100% celebration overlay — editable per household.
+export const MAX_MESSAGE_LEN = 80;
+
+// Copy shown on the celebration overlay and the per-person praise banner.
 export interface CelebrationMessages {
   completeTitle: string;
   completeTagline: string;
+  praiseTitle: string;  // "{name}" becomes the person's name
+  praiseSub: string;    // "{name}" allowed here too
 }
 
 export const DEFAULT_MESSAGES: CelebrationMessages = {
   completeTitle: "Purification Complete",
   completeTagline: "Your Outties are Happy",
+  praiseTitle: "Good Job, Innie {name}!",
+  praiseSub: "You have completed your tasks.",
+};
+
+// Which chore kinds count toward every percentage, plus the celebration edge.
+export interface ScoringConfig {
+  daily: boolean;
+  cycle: boolean;
+  once: boolean;
+  kierThreshold: number; // whole percent, 1..100
+}
+
+export const DEFAULT_SCORING: ScoringConfig = {
+  daily: true,
+  cycle: true,
+  once: true,
+  kierThreshold: 100,
 };
 
 export interface HouseholdConfig {
@@ -51,6 +77,7 @@ export interface HouseholdConfig {
   bins: Bin[];
   chores: ChoreDefV2[];
   messages: CelebrationMessages;
+  scoring: ScoringConfig;
 }
 
 // Per-chore rolling state (persisted).
@@ -145,11 +172,23 @@ export const TEMPLATE_CHORES: ChoreDefV2[] = [
 ];
 
 export function templateConfig(people: Person[]): HouseholdConfig {
-  return { people, bins: [...TEMPLATE_BINS], chores: TEMPLATE_CHORES.map((c) => ({ ...c })), messages: { ...DEFAULT_MESSAGES } };
+  return {
+    people,
+    bins: [...TEMPLATE_BINS],
+    chores: TEMPLATE_CHORES.map((c) => ({ ...c })),
+    messages: { ...DEFAULT_MESSAGES },
+    scoring: { ...DEFAULT_SCORING },
+  };
 }
 
 export function emptyConfig(people: Person[]): HouseholdConfig {
-  return { people, bins: [...TEMPLATE_BINS], chores: [], messages: { ...DEFAULT_MESSAGES } };
+  return {
+    people,
+    bins: [...TEMPLATE_BINS],
+    chores: [],
+    messages: { ...DEFAULT_MESSAGES },
+    scoring: { ...DEFAULT_SCORING },
+  };
 }
 
 export function emptyPeriod(period: string): PeriodLogV2 {

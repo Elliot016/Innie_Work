@@ -883,3 +883,22 @@ body {
 .nav-slot.prev { justify-content: flex-end; }
 .nav-slot.next { justify-content: flex-start; }
 .ov-header .page-nav { margin-top: 2px; }
+
+/* Per-chore completion banner: same shell as the praise banner, tighter type */
+.chore-banner .done-banner-title { font-size: 0.95rem; }
+.chore-banner .done-banner-sub { text-transform: uppercase; opacity: 0.85; }
+.banner-more {
+  margin: 8px 16px 0; text-align: center;
+  font-size: 0.55rem; letter-spacing: 0.12em;
+  color: var(--term-dim); text-transform: uppercase;
+}
+
+/* Settings helper + warning lines */
+.set-hint {
+  font-size: 0.55rem; color: var(--term-dim);
+  letter-spacing: 0.1em; text-transform: uppercase; line-height: 1.5;
+}
+.set-warn {
+  font-size: 0.55rem; color: var(--yellow);
+  letter-spacing: 0.08em; line-height: 1.5;
+}

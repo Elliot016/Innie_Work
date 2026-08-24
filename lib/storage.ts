@@ -1,8 +1,12 @@
 import {
+  CelebrationMessages,
   ChoreDayState,
   ChoreDefV2,
   DEFAULT_MESSAGES,
+  DEFAULT_SCORING,
   HouseholdConfig,
+  MAX_MESSAGE_LEN,
+  ScoringConfig,
   PeriodLogV2,
   PersistedV2,
   Person,
@@ -48,6 +52,16 @@ export function sanitize(raw: unknown): PersistedV2 | null {
         .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
         .map((c, i) => {
           const cycleDays = Math.max(1, num(c.cycleDays, 1));
+          // A message aimed at a deleted person takes the message with it —
+          // re-pointing it at "everyone" would show the wrong praise to all.
+          const wantsFor = typeof c.messageFor === "string" && c.messageFor !== "";
+          const msgFor = wantsFor && people.some((p) => p.id === c.messageFor)
+            ? (c.messageFor as string)
+            : undefined;
+          const dangling = wantsFor && !msgFor;
+          const msg = typeof c.message === "string"
+            ? c.message.trim().slice(0, MAX_MESSAGE_LEN)
+            : "";
           return {
             id: str(c.id, `chore${i}`),
             name: str(c.name, `Chore ${i + 1}`),
@@ -62,17 +76,37 @@ export function sanitize(raw: unknown): PersistedV2 | null {
             assignees: Array.isArray(c.assignees)
               ? (c.assignees as unknown[]).filter((a): a is string => typeof a === "string" && people.some((p) => p.id === a))
               : [],
+            message: msg && !dangling ? msg : undefined,
+            messageFor: msgFor,
           };
         })
     : [];
 
   if (people.length === 0 || bins.length === 0) return null;
   const m = (cfg.messages ?? {}) as Record<string, unknown>;
-  const messages = {
-    completeTitle: str(m.completeTitle, DEFAULT_MESSAGES.completeTitle),
+  // A blank title would render an empty banner line; treat it as "unset".
+  // Sub-lines may stay blank — they're rendered conditionally.
+  const strNE = (v: unknown, fb: string) => (typeof v === "string" && v.trim() !== "" ? v : fb);
+  const bool = (v: unknown, fb: boolean) => (typeof v === "boolean" ? v : fb);
+  const messages: CelebrationMessages = {
+    completeTitle: strNE(m.completeTitle, DEFAULT_MESSAGES.completeTitle),
     completeTagline: str(m.completeTagline, DEFAULT_MESSAGES.completeTagline),
+    praiseTitle: strNE(m.praiseTitle, DEFAULT_MESSAGES.praiseTitle),
+    praiseSub: str(m.praiseSub, DEFAULT_MESSAGES.praiseSub),
   };
-  const config: HouseholdConfig = { people, bins, chores, messages };
+  const sc = (cfg.scoring ?? {}) as Record<string, unknown>;
+  let scoring: ScoringConfig = {
+    daily: bool(sc.daily, DEFAULT_SCORING.daily),
+    cycle: bool(sc.cycle, DEFAULT_SCORING.cycle),
+    once: bool(sc.once, DEFAULT_SCORING.once),
+    kierThreshold: Math.min(100, Math.max(1,
+      Math.round(num(sc.kierThreshold, DEFAULT_SCORING.kierThreshold)))),
+  };
+  // Nothing counted would mean a permanently blank board — count everything.
+  if (!scoring.daily && !scoring.cycle && !scoring.once) {
+    scoring = { ...scoring, daily: true, cycle: true, once: true };
+  }
+  const config: HouseholdConfig = { people, bins, chores, messages, scoring };
 
   const period = (v: unknown, fb: string): PeriodLogV2 => {
     if (!v || typeof v !== "object") return emptyPeriod(fb);

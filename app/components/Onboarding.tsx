@@ -31,7 +31,7 @@ export default function Onboarding({
   return (
     <div className="onboard">
       <div className="onboard-box">
-        <div className="ob-eyebrow">Lumon Home Division</div>
+        <div className="ob-eyebrow"> Home Division</div>
         <div className="ob-title">New Household Detected</div>
         <div className="ob-sub">Who works here? Add at least one person.</div>
 
