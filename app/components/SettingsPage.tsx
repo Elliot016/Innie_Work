@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { sanitize, saveAll } from "@/lib/storage";
 import {
   Bin,
   BUILT_IN_ICONS,
@@ -12,6 +13,7 @@ import {
   MAX_MESSAGE_LEN,
   Person,
   ScoringConfig,
+  STORAGE_KEY_V2,
 } from "@/lib/model";
 
 type Mutate = (mutate: (cfg: HouseholdConfig) => HouseholdConfig) => void;
@@ -324,6 +326,82 @@ function ChoreForm({ chore, config, onUpdate, onDone }: { chore: ChoreDefV2; con
   );
 }
 
+// ── DATA (backup / restore) ────────────────────────────────────────────────
+// Storage is per device and per home-screen bookmark, so this is how a
+// household moves its board to a new iPad or recovers after a re-install:
+// copy the backup text on the old device, paste it on the new one.
+function DataSection({ open, head }: { open: boolean; head: React.ReactNode }) {
+  const [text, setText] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
+  const [armed, setArmed] = useState(false);
+
+  const currentBlob = () => {
+    try { return localStorage.getItem(STORAGE_KEY_V2) ?? ""; } catch { return ""; }
+  };
+
+  const summary = (raw: string) => {
+    const clean = sanitize((() => { try { return JSON.parse(raw); } catch { return null; } })());
+    if (!clean) return null;
+    return `${clean.config.people.length} people · ${clean.config.chores.length} chores · ${clean.history.length} archived months`;
+  };
+
+  const exportNow = async () => {
+    const blob = currentBlob();
+    setText(blob);
+    try {
+      await navigator.clipboard.writeText(blob);
+      setStatus("Copied to clipboard. Paste it into Notes, Messages, or the new device.");
+    } catch {
+      setStatus("Select the text below and copy it.");
+    }
+  };
+
+  const importNow = () => {
+    const clean = sanitize((() => { try { return JSON.parse(text); } catch { return null; } })());
+    if (!clean) { setStatus("That doesn't look like a valid backup."); setArmed(false); return; }
+    if (!armed) { setArmed(true); setStatus(`Replace this device's board with: ${summary(text)}?`); return; }
+    saveAll(clean);
+    // The simplest correct rehydration: every hook reloads from storage.
+    location.reload();
+  };
+
+  return (
+    <div className="set-section">
+      {head}
+      {open && (
+      <div className="set-form" style={{ paddingTop: 6 }}>
+        <div className="set-hint">
+          Your board lives only on this device. Back it up before changing bookmarks or devices.
+        </div>
+        <div className="set-toggle">
+          <button className="set-btn sel" onClick={exportNow}>[ COPY BACKUP ]</button>
+        </div>
+        <label className="set-label">Backup text (paste here to restore)
+          <textarea
+            className="set-input set-textarea"
+            value={text}
+            spellCheck={false}
+            onChange={(e) => { setText(e.target.value); setArmed(false); setStatus(null); }}
+            placeholder="Paste a backup here…"
+          />
+        </label>
+        {text.trim() !== "" && summary(text) && (
+          <div className="set-hint">Contains: {summary(text)}</div>
+        )}
+        <div className="set-form-actions">
+          <button
+            className={`set-btn danger${armed ? " armed" : ""}`}
+            disabled={text.trim() === ""}
+            onClick={importNow}
+          >{armed ? "CONFIRM REPLACE" : "IMPORT & REPLACE"}</button>
+        </div>
+        {status && <div className="set-hint">{status}</div>}
+      </div>
+      )}
+    </div>
+  );
+}
+
 // ── PAGE ───────────────────────────────────────────────────────────────────
 export default function SettingsPage({
   config,
@@ -556,6 +634,8 @@ export default function SettingsPage({
         </div>
         )}
       </div>
+
+      <DataSection open={openSecs.has("data")} head={secHead("data", "Data", "BACKUP · RESTORE")} />
     </div>
   );
 }

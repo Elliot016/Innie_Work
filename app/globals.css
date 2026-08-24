@@ -1055,3 +1055,10 @@ body {
   .ss-glitch, .ss-tear, .ss-face.back { display: none; }
   .screensaver::after { display: none; }   /* mirrors the global scanline rule */
 }
+
+/* Backup / restore textarea */
+.set-textarea {
+  min-height: 96px; resize: vertical;
+  font-size: 0.6rem; line-height: 1.4;
+  white-space: pre; overflow: auto;
+}
