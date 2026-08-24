@@ -145,11 +145,10 @@ function unitsOf(c: ChoreState, people: Person[]): { done: number; total: number
     const assignees = resolveAssignees(c.def, people);
     return { total: assignees.length, done: assignees.filter((p) => c.doneBy[p.id]).length };
   }
-  if (c.def.kind === "once") {
-    // Pending work until it's actually logged.
-    return { total: 1, done: c.done ? 1 : 0 };
-  }
-  return { total: 1, done: c.done || c.daysAgo <= c.def.greenMax ? 1 : 0 };
+  // Cycle and one-off chores count only once actually logged. A cycle chore
+  // that is merely "not due yet" is not progress — counting it as done kept
+  // every cycle bin pinned at 100% whether or not anyone had lifted a finger.
+  return { total: 1, done: c.done ? 1 : 0 };
 }
 
 // null = nothing counted here, which renders as "—" rather than a misleading
