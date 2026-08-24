@@ -481,7 +481,6 @@ export default function Home() {
 
   // ── Progress
   const dailyChores = chores.filter((c) => c.def.kind === "daily");
-  const allDone = dailyChores.length > 0 && dailyChores.every((c) => dailyDone(c, people));
   const overall = overallPct(config.bins, chores, people, config.scoring) ?? 0;
   // Unrounded, so a 99.5% board can't trip a 100% threshold.
   const exact = overallExactPct(config.bins, chores, people, config.scoring);
@@ -741,7 +740,7 @@ export default function Home() {
           <div className="banner-more">+{choreMsgs.length - MAX_CHORE_BANNERS} more completed</div>
         )}
 
-        {!allDone && finishedPeople.map((p) => (
+        {finishedPeople.map((p) => (
           <div key={p.id} className="done-banner praise-banner" style={pcStyle(p.color)}>
             <div className="done-banner-title">{fillName(config.messages.praiseTitle, p.name)}</div>
             {config.messages.praiseSub.trim() !== "" && (
@@ -749,13 +748,6 @@ export default function Home() {
             )}
           </div>
         ))}
-
-        {allDone && (
-          <div className="done-banner">
-            <div className="done-banner-title">The work is complete.</div>
-            <div className="done-banner-sub">&ldquo;Your Outties are very happy with your performance.&rdquo;</div>
-          </div>
-        )}
 
         <div className="bottom-pad" />
       </div>
