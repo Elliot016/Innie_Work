@@ -544,6 +544,9 @@ body {
   text-shadow: 0 0 6px currentColor;
 }
 .mdr-piece.mdr-sub { font-size: 0.58rem; letter-spacing: 0.1em; text-shadow: 0 0 4px currentColor; }
+/* Dust: the smaller particles each glyph throws off on its way to the bin */
+.mdr-piece.mdr-dust { font-size: 0.55rem; opacity: 0.75; text-shadow: 0 0 5px currentColor; }
+.mdr-piece.mdr-sub.mdr-dust { font-size: 0.45rem; }
 
 .bin-dock {
   position: absolute; left: 14px; right: 14px;

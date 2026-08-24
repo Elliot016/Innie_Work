@@ -38,16 +38,22 @@ import SettingsPage from "./components/SettingsPage";
 import TerminalFrame from "./components/TerminalFrame";
 
 // MDR ("macrodata refinement") bin animation timing
-const FLIGHT_MS = 1800;        // letter lifetime: scatter, then fall into the bin
-const SCATTER_MS = 520;        // scatter phase within FLIGHT_MS
-const REASSEMBLE_DELAY = 1600; // name fades back onto the card after this
-const RETURN_MS = 350;         // length of the reassemble animation
+const FLIGHT_MS = 2250;        // letter lifetime: scatter, then fall into the bin
+const SCATTER_MS = 650;        // scatter phase within FLIGHT_MS
+const REASSEMBLE_DELAY = 2000; // name fades back onto the card after this
+const RETURN_MS = 440;         // length of the reassemble animation
+
+// Each glyph also throws off a little refined "dust" on its way to the bin.
+const DUST_PER_NAME_GLYPH = 2;
+const DUST_PER_SUB_GLYPH = 1;
+const DUST_CHARS = "0123456789";
 
 // One letter of a chore name, in viewport px, with its flight path to the bin
 // pre-rolled so rendering stays pure.
 interface Piece {
   ch: string; x: number; y: number; w: number; h: number;
   sub: boolean;                          // from the small subtitle line, not the name
+  dust: boolean;                         // scattered particle, not an actual letter
   sx: number; sy: number; rot: number;   // scatter offset + spin
   dx: number; dy: number; delay: number; // final offset into the bin
 }
@@ -73,7 +79,7 @@ function buildPieces(textNode: Node, bin: { x: number; y: number }, sub = false)
     range.setEnd(textNode, k + 1);
     const r = range.getBoundingClientRect();
     pieces.push({
-      ch: text[k], x: r.left, y: r.top, w: r.width, h: r.height, sub,
+      ch: text[k], x: r.left, y: r.top, w: r.width, h: r.height, sub, dust: false,
       sx: (Math.random() - 0.5) * 60,
       sy: -(10 + Math.random() * 30),
       rot: (Math.random() - 0.5) * 90,
@@ -81,6 +87,22 @@ function buildPieces(textNode: Node, bin: { x: number; y: number }, sub = false)
       dy: bin.y - r.top,
       delay: Math.random() * 120,
     });
+    // Dust: smaller particles thrown off the same glyph, flying wider.
+    const dustCount = sub ? DUST_PER_SUB_GLYPH : DUST_PER_NAME_GLYPH;
+    for (let d = 0; d < dustCount; d++) {
+      const px = r.left + (Math.random() - 0.5) * 10;
+      const py = r.top + (Math.random() - 0.5) * 8;
+      pieces.push({
+        ch: DUST_CHARS[Math.floor(Math.random() * DUST_CHARS.length)],
+        x: px, y: py, w: r.width, h: r.height, sub, dust: true,
+        sx: (Math.random() - 0.5) * 110,
+        sy: -(6 + Math.random() * 48),
+        rot: (Math.random() - 0.5) * 180,
+        dx: bin.x - px - r.width / 2 + (Math.random() - 0.5) * 46,
+        dy: bin.y - py,
+        delay: Math.random() * 260,
+      });
+    }
   }
   return pieces;
 }
@@ -820,7 +842,7 @@ export default function Home() {
         f.pieces.map((p, k) => (
           <span
             key={`${f.id}-${k}`}
-            className={`mdr-piece${p.sub ? " mdr-sub" : ""}`}
+            className={`mdr-piece${p.sub ? " mdr-sub" : ""}${p.dust ? " mdr-dust" : ""}`}
             style={{ left: p.x, top: p.y, width: p.w, height: p.h, color: f.color }}
             ref={(el) => animatePiece(el, p)}
           >{p.ch}</span>
