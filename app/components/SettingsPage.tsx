@@ -7,6 +7,7 @@ import {
   ChoreDefV2,
   ChoreKind,
   DEFAULT_PALETTE,
+  DisplayConfig,
   HouseholdConfig,
   MAX_MESSAGE_LEN,
   Person,
@@ -324,7 +325,15 @@ function ChoreForm({ chore, config, onUpdate, onDone }: { chore: ChoreDefV2; con
 }
 
 // ── PAGE ───────────────────────────────────────────────────────────────────
-export default function SettingsPage({ config, onUpdate }: { config: HouseholdConfig; onUpdate: Mutate }) {
+export default function SettingsPage({
+  config,
+  onUpdate,
+  onPreviewScreensaver,
+}: {
+  config: HouseholdConfig;
+  onUpdate: Mutate;
+  onPreviewScreensaver: () => void;
+}) {
   const [open, setOpen] = useState<string | null>(null);
   const toggle = (id: string) => setOpen((prev) => (prev === id ? null : id));
 
@@ -392,6 +401,9 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
     onUpdate((cfg) => ({ ...cfg, scoring: { ...cfg.scoring, ...patch } }));
   const setMessage = (key: keyof HouseholdConfig["messages"], value: string) =>
     onUpdate((cfg) => ({ ...cfg, messages: { ...cfg.messages, [key]: value } }));
+  const display = config.display;
+  const setDisplay = (patch: Partial<DisplayConfig>) =>
+    onUpdate((cfg) => ({ ...cfg, display: { ...cfg.display, ...patch } }));
 
   const binLabel = (binId: string) => {
     const b = config.bins.find((bb) => bb.id === binId);
@@ -517,6 +529,30 @@ export default function SettingsPage({ config, onUpdate }: { config: HouseholdCo
             />
           </label>
           <div className="set-hint">{"{name}"} becomes the person&rsquo;s name. Titles are shown in caps.</div>
+        </div>
+        )}
+      </div>
+
+      <div className="set-section">
+        {secHead("display", "Display",
+          display.screensaverMin === 0 ? "SCREENSAVER OFF" : `SCREENSAVER · ${display.screensaverMin} MIN`)}
+        {openSecs.has("display") && (
+        <div className="set-form" style={{ paddingTop: 6 }}>
+          <label className="set-label">Screensaver after
+            <input
+              type="number" min={0} max={120}
+              className="set-input narrow"
+              value={display.screensaverMin}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10);
+                setDisplay({ screensaverMin: isNaN(n) ? 0 : Math.min(120, Math.max(0, n)) });
+              }}
+            /> min
+          </label>
+          <div className="set-hint">0 = never. Any tap wakes the board.</div>
+          <div className="set-toggle">
+            <button className="set-btn" onClick={onPreviewScreensaver}>[ PREVIEW ]</button>
+          </div>
         </div>
         )}
       </div>

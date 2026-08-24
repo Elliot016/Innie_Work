@@ -68,12 +68,22 @@ export const DEFAULT_SCORING: ScoringConfig = {
   kierThreshold: 100,
 };
 
+// Idle screensaver. 0 = never.
+export interface DisplayConfig {
+  screensaverMin: number; // whole minutes, 0..120
+}
+
+export const DEFAULT_DISPLAY: DisplayConfig = {
+  screensaverMin: 3,
+};
+
 export interface HouseholdConfig {
   people: Person[];
   bins: Bin[];
   chores: ChoreDefV2[];
   messages: CelebrationMessages;
   scoring: ScoringConfig;
+  display: DisplayConfig;
 }
 
 // Per-chore rolling state (persisted).
@@ -174,6 +184,7 @@ export function templateConfig(people: Person[]): HouseholdConfig {
     chores: TEMPLATE_CHORES.map((c) => ({ ...c })),
     messages: { ...DEFAULT_MESSAGES },
     scoring: { ...DEFAULT_SCORING },
+    display: { ...DEFAULT_DISPLAY },
   };
 }
 
@@ -184,6 +195,7 @@ export function emptyConfig(people: Person[]): HouseholdConfig {
     chores: [],
     messages: { ...DEFAULT_MESSAGES },
     scoring: { ...DEFAULT_SCORING },
+    display: { ...DEFAULT_DISPLAY },
   };
 }
 

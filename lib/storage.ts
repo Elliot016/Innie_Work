@@ -3,8 +3,10 @@ import {
   ChoreDayState,
   ChoreDefV2,
   ChoreKind,
+  DEFAULT_DISPLAY,
   DEFAULT_MESSAGES,
   DEFAULT_SCORING,
+  DisplayConfig,
   HouseholdConfig,
   MAX_MESSAGE_LEN,
   ScoringConfig,
@@ -109,7 +111,12 @@ export function sanitize(raw: unknown): PersistedV2 | null {
     kierThreshold: Math.min(100, Math.max(1,
       Math.round(num(sc.kierThreshold, DEFAULT_SCORING.kierThreshold)))),
   };
-  const config: HouseholdConfig = { people, bins, chores, messages, scoring };
+  const dp = (cfg.display ?? {}) as Record<string, unknown>;
+  const display: DisplayConfig = {
+    screensaverMin: Math.min(120, Math.max(0,
+      Math.round(num(dp.screensaverMin, DEFAULT_DISPLAY.screensaverMin)))),
+  };
+  const config: HouseholdConfig = { people, bins, chores, messages, scoring, display };
 
   const period = (v: unknown, fb: string): PeriodLogV2 => {
     if (!v || typeof v !== "object") return emptyPeriod(fb);

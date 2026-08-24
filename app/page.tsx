@@ -38,7 +38,10 @@ import DigitField from "./components/DigitField";
 import KierOverlay from "./components/KierOverlay";
 import Onboarding from "./components/Onboarding";
 import SettingsPage from "./components/SettingsPage";
+import Screensaver from "./components/Screensaver";
 import TerminalFrame from "./components/TerminalFrame";
+import { useIdle } from "./hooks/useIdle";
+import { useWakeLock } from "./hooks/useWakeLock";
 
 // MDR ("macrodata refinement") bin animation timing
 const FLIGHT_MS = 2250;        // letter lifetime: scatter, then fall into the bin
@@ -235,6 +238,13 @@ export default function Home() {
     }, 60000);
     return () => clearInterval(id);
   }, []);
+
+  // Idle screensaver + keep the wall panel awake. The saver never covers
+  // onboarding or the celebration; those are dismissed first, and that tap
+  // counts as activity.
+  const { idle, wake, sleep } = useIdle(config.display.screensaverMin * 60_000);
+  useWakeLock(true);
+  const saverShown = idle && loaded && !needsOnboarding && !kierShown;
 
   // Latest monthly tally, readable from the rollover effect without re-running it.
   const monthlyRef = useRef(monthly);
@@ -855,7 +865,7 @@ export default function Home() {
           </div>
           {pageNav}
         </div>
-        <SettingsPage config={config} onUpdate={updateConfig} />
+        <SettingsPage config={config} onUpdate={updateConfig} onPreviewScreensaver={sleep} />
         <div className="bottom-pad" />
       </div>
     </div>
@@ -868,6 +878,7 @@ export default function Home() {
       tagline={config.messages.completeTagline}
       onDismiss={() => setKierShown(false)}
     />
+    <Screensaver show={saverShown} onDismiss={wake} />
 
     {/* ── MDR LAYER: flying letters + the bin ── */}
     <div className={`mdr-layer${page === 0 ? "" : " mdr-hidden"}`} aria-hidden>
