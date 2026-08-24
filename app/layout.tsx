@@ -17,7 +17,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Purge & Polish Industries",
+  title: "Purge & Polish Terminal",
   description: "Household Operations Terminal",
   // Makes "Add to Home Screen" launch fullscreen like a native app.
   appleWebApp: {

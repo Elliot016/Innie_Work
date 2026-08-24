@@ -58,13 +58,16 @@ export const DEFAULT_MESSAGES: CelebrationMessages = {
 };
 
 // Which chore kind counts toward every percentage, plus the celebration edge.
+// "all" counts every kind, so every bin fills as its own chores are finished.
+export type ScoreKind = ChoreKind | "all";
+
 export interface ScoringConfig {
-  countKind: ChoreKind;
+  countKind: ScoreKind;
   celebrateAt: number; // whole percent, 1..100
 }
 
 export const DEFAULT_SCORING: ScoringConfig = {
-  countKind: "daily",
+  countKind: "all",
   celebrateAt: 100,
 };
 

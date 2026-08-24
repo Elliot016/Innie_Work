@@ -9,6 +9,7 @@ import {
   DisplayConfig,
   HouseholdConfig,
   MAX_MESSAGE_LEN,
+  ScoreKind,
   ScoringConfig,
   PeriodLogV2,
   PersistedV2,
@@ -103,8 +104,8 @@ export function sanitize(raw: unknown): PersistedV2 | null {
   const legacyKind: ChoreKind | null =
     sc.daily === true ? "daily" : sc.cycle === true ? "cycle" : sc.once === true ? "once" : null;
   const rawKind = sc.countKind;
-  const countKind: ChoreKind =
-    rawKind === "daily" || rawKind === "cycle" || rawKind === "once"
+  const countKind: ScoreKind =
+    rawKind === "all" || rawKind === "daily" || rawKind === "cycle" || rawKind === "once"
       ? rawKind
       : legacyKind ?? DEFAULT_SCORING.countKind;
   const scoring: ScoringConfig = {

@@ -6,12 +6,12 @@ import {
   Bin,
   BUILT_IN_ICONS,
   ChoreDefV2,
-  ChoreKind,
   DEFAULT_PALETTE,
   DisplayConfig,
   HouseholdConfig,
   MAX_MESSAGE_LEN,
   Person,
+  ScoreKind,
   ScoringConfig,
   LEGACY_KEY_V2,
   STORAGE_KEY_V2,
@@ -21,7 +21,8 @@ type Mutate = (mutate: (cfg: HouseholdConfig) => HouseholdConfig) => void;
 
 const pc = (color: string) => ({ "--pc": color } as CSSProperties);
 
-const KIND_OPTIONS: { k: ChoreKind; label: string }[] = [
+const KIND_OPTIONS: { k: ScoreKind; label: string }[] = [
+  { k: "all", label: "ALL" },
   { k: "daily", label: "DAILY" },
   { k: "cycle", label: "CYCLE" },
   { k: "once", label: "ONCE" },
