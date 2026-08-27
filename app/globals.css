@@ -12,6 +12,14 @@
   --term-dim: rgba(232, 242, 248, 0.45);
   --term-glow: 0 0 6px rgba(180, 220, 255, 0.4);
 
+  /* Board chrome runs on a face with a real bold, so it reads from across the
+     room. Overlays and the ambient digits stay on --font-display (VT323) for
+     atmosphere. Plex Mono is already loaded at 400/600/700 — no extra font. */
+  --font-board: var(--font-mono), 'IBM Plex Mono', monospace;
+  /* Sub-lines are deliberately brighter than --term-dim, which is shared with
+     the Overview, Settings and bin captions and shouldn't move with them. */
+  --card-sub: rgba(232, 242, 248, 0.62);
+
   /* aliases kept for shared rules */
   --bg: var(--term-bg);
   --surface: var(--term-screen);
@@ -20,6 +28,7 @@
   --text: var(--term-fg);
   --sub: var(--term-dim);
 
+  --daily: #7ec8f5;
   --green: #6fd0a0;
   --yellow: #e0c060;
   --red: #e07070;
@@ -58,7 +67,10 @@ body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 85;
+  /* Below `.pages` (z 1) so cards, bins and flying letters stay clean, but
+     above `.digit-field` (z 0, earlier in the DOM) so the ambient background
+     keeps its CRT texture. The header carries its own copy — see below. */
+  z-index: 0;
   background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px);
 }
 
@@ -78,6 +90,18 @@ body {
   background: var(--term-screen);
 }
 
+/* The header sits above the background scanline layer, so it carries its own
+   copy — otherwise it would be the one flat strip on an otherwise textured
+   screen. */
+.term-hdr::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px);
+}
+
 .term-date {
   width: 96px;
   font-size: 0.7rem;
@@ -86,27 +110,15 @@ body {
 }
 
 .term-pct {
-  font-family: var(--font-display), 'VT323', monospace;
-  font-size: 1.7rem;
-  letter-spacing: 0.06em;
+  font-family: var(--font-board);
+  font-size: 1.35rem; font-weight: 700;
+  letter-spacing: 0.04em;
   text-shadow: var(--term-glow);
   white-space: nowrap;
 }
 
 .term-logo { width: 96px; display: flex; justify-content: flex-end; color: var(--term-fg); }
 .term-logo svg { height: 30px; }
-
-.term-hex {
-  position: fixed;
-  left: 0; right: 0;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-  text-align: center;
-  font-size: 0.6rem;
-  letter-spacing: 0.22em;
-  color: var(--term-dim);
-  z-index: 55;
-  pointer-events: none;
-}
 
 /* ── AMBIENT DIGITS ── */
 .digit-field {
@@ -234,32 +246,70 @@ body {
 .task-card:active { filter: brightness(1.15); }
 .task-card:hover { box-shadow: 0 0 14px rgba(140, 215, 255, 0.18); }
 
-/* Urgency, drawn on the box itself: aging = yellow outline, overdue = red pulse. */
-.task-card.age-yellow {
-  border-color: var(--yellow);
-  outline-color: color-mix(in srgb, var(--yellow) 45%, transparent);
+/* Daily chores never age, so they carry their own hue rather than an urgency
+   one — a light wash plus a cyan border and name. */
+.task-card.kind-daily {
+  background: color-mix(in srgb, var(--daily) 10%, var(--surface2));
+  border-color: var(--daily);
+  outline-color: color-mix(in srgb, var(--daily) 30%, transparent);
 }
-.task-card.age-red { animation: urgent-pulse 2.8s ease-in-out infinite; }
+.task-card.kind-daily .card-name {
+  color: var(--daily);
+  text-shadow: 0 0 7px color-mix(in srgb, var(--daily) 45%, transparent);
+}
+
+/* Urgency fills the whole card: aging is solid yellow, overdue solid red with
+   a slow internal pulse. Everything inside flips to dark type. */
+.task-card.age-yellow { background: var(--yellow); border-color: var(--yellow); }
+.task-card.age-red    { background: var(--red);    border-color: var(--red);
+                        animation: urgent-pulse 2.8s ease-in-out infinite; }
+.task-card.age-yellow { outline-color: color-mix(in srgb, var(--yellow) 55%, transparent); }
+.task-card.age-red    { outline-color: color-mix(in srgb, var(--red) 55%, transparent); }
+
+.task-card.age-yellow .card-name,
+.task-card.age-red .card-name,
+.task-card.age-yellow .card-since,
+.task-card.age-red .card-since,
+.task-card.age-yellow .day-count,
+.task-card.age-red .day-count,
+.task-card.age-yellow .who-status,
+.task-card.age-red .who-status {
+  color: var(--term-bg);
+  text-shadow: none;
+}
+.task-card.age-yellow .person-chip,
+.task-card.age-red .person-chip { color: var(--term-bg); border-color: var(--term-bg); }
+/* .who-status and the part rows set their colour inline from these two tokens,
+   so redefining them on the card is the only way to reach that text. Done vs
+   pending is carried by weight rather than hue once the card is solid. */
+.task-card.age-yellow,
+.task-card.age-red {
+  --sub: color-mix(in srgb, var(--term-bg) 58%, transparent);
+  --green: var(--term-bg);
+}
+/* The line art is black to begin with, so on a bright card it multiplies in
+   instead of being inverted to white and screened over the dark board. */
+.task-card.age-yellow .card-image-bg,
+.task-card.age-red .card-image-bg {
+  filter: none;
+  mix-blend-mode: multiply;
+  opacity: 0.16;
+}
+
+/* The pulse stays inside the card so it never bleeds onto the board. */
 @keyframes urgent-pulse {
-  0%, 100% {
-    border-color: color-mix(in srgb, var(--red) 45%, transparent);
-    outline-color: color-mix(in srgb, var(--red) 30%, transparent);
-    box-shadow: inset 0 0 0 0 rgba(224, 112, 112, 0);
-  }
-  50% {
-    border-color: var(--red);
-    outline-color: color-mix(in srgb, var(--red) 60%, transparent);
-    box-shadow: inset 0 0 24px 2px rgba(224, 112, 112, 0.2);
-  }
+  0%, 100% { background: color-mix(in srgb, var(--red) 82%, #000); }
+  50%      { background: var(--red); }
 }
 
 .card-top { position: relative; z-index: 1; padding-left: 2px; padding-top: 2px; }
 .card-name {
-  font-family: var(--font-display), 'VT323', monospace;
-  font-size: 1.15rem; font-weight: 400; line-height: 1.1;
-  letter-spacing: 0.07em; text-transform: uppercase;
-  text-shadow: var(--term-glow);
-  margin-bottom: 3px;
+  font-family: var(--font-board);
+  font-size: 0.95rem; font-weight: 700; line-height: 1.15;
+  letter-spacing: 0.03em; text-transform: uppercase;
+  /* A 6px bloom that suited thin VT323 turns to mush on a bold face. */
+  text-shadow: 0 0 4px rgba(180, 220, 255, 0.28);
+  margin-bottom: 4px;
   transition: opacity 0.15s, filter 0.15s;
 }
 /* Name is "refined" away while its letters fly to the bin, then reassembles. */
@@ -274,12 +324,12 @@ body {
 .task-card.chore-done { opacity: 0.38; }
 
 .card-since {
-  font-size: 0.58rem; font-weight: 400; color: var(--term-dim);
-  letter-spacing: 0.1em; text-transform: uppercase;
+  font-size: 0.55rem; font-weight: 700; color: var(--card-sub);
+  letter-spacing: 0.08em; text-transform: uppercase;
 }
 .card-since.green-text  { color: var(--green); }
 .card-since.yellow-text { color: var(--yellow); }
-.card-since.red-text    { color: var(--red); font-weight: 600; }
+.card-since.red-text    { color: var(--red); }
 
 .card-bottom {
   display: flex; align-items: center; justify-content: space-between;
@@ -307,9 +357,9 @@ body {
 
 .cycle-day { display: flex; align-items: center; }
 .day-count {
-  font-family: var(--font-display), 'VT323', monospace;
-  font-size: 0.95rem; letter-spacing: 0.1em;
-  color: var(--term-dim);
+  font-family: var(--font-board);
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--card-sub);
 }
 
 .who-status {
@@ -514,14 +564,14 @@ body {
 
 .flight-piece {
   position: absolute; display: block;
-  font-family: var(--font-display), 'VT323', monospace;
-  font-size: 1.15rem; font-weight: 400; line-height: 1.1;
-  letter-spacing: 0.07em; text-transform: uppercase;
+  font-family: var(--font-board);
+  font-size: 0.95rem; font-weight: 700; line-height: 1.15;
+  letter-spacing: 0.03em; text-transform: uppercase;
   text-align: center; white-space: pre;
   will-change: transform, opacity;
   text-shadow: 0 0 6px currentColor;
 }
-.flight-piece.flight-sub { font-size: 0.58rem; letter-spacing: 0.1em; text-shadow: 0 0 4px currentColor; }
+.flight-piece.flight-sub { font-size: 0.55rem; letter-spacing: 0.08em; text-shadow: 0 0 4px currentColor; }
 /* Dust: the smaller particles each glyph throws off on its way to the bin */
 .flight-piece.flight-dust { font-size: 0.55rem; opacity: 0.75; text-shadow: 0 0 5px currentColor; }
 .flight-piece.flight-sub.flight-dust { font-size: 0.45rem; }
@@ -555,8 +605,9 @@ body {
   display: flex; justify-content: space-between; align-items: baseline;
 }
 .bin-num {
-  font-family: var(--font-display), 'VT323', monospace;
-  font-size: 0.95rem; text-shadow: var(--term-glow);
+  font-family: var(--font-board);
+  font-size: 0.72rem; font-weight: 700;
+  text-shadow: 0 0 4px rgba(180, 220, 255, 0.28);
 }
 .bin-cat { font-size: 0.52rem; letter-spacing: 0.14em; color: var(--term-dim); }
 .bin-gauge {
@@ -577,14 +628,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .task-card.age-red {
-    animation: none;
-    border-color: var(--red);
-    box-shadow: inset 0 0 18px 1px rgba(224, 112, 112, 0.14);
-  }
+  .task-card.age-red { animation: none; background: var(--red); }
   .flight-piece { display: none; }
   .digit-field { display: none; }
-  .scanlines::after { display: none; }
+  .scanlines::after, .term-hdr::after { display: none; }
   .card-name, .card-since, .card-name.name-return, .card-since.name-return { animation: none; transition: none; }
   .card-name.name-hidden, .card-since.name-hidden { opacity: 1; filter: none; }
   .bin-door { transition: none; }

@@ -1,7 +1,18 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { sanitize, saveAll } from "@/lib/storage";
+import {
+  BACKUP_STALE_DAYS,
+  currentRaw,
+  daysSinceBackup,
+  deleteSnapshot,
+  describe,
+  downloadBackup,
+  listSnapshots,
+  markBackedUp,
+  type SnapshotEntry,
+} from "@/lib/backup";
 import {
   Bin,
   BUILT_IN_ICONS,
@@ -13,8 +24,6 @@ import {
   Person,
   ChoreKind,
   ScoringConfig,
-  LEGACY_KEY_V2,
-  STORAGE_KEY_V2,
 } from "@/lib/model";
 
 type Mutate = (mutate: (cfg: HouseholdConfig) => HouseholdConfig) => void;
@@ -350,35 +359,78 @@ function DataSection({ open, head }: { open: boolean; head: React.ReactNode }) {
   const [text, setText] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [armed, setArmed] = useState(false);
+  const [snaps, setSnaps] = useState<SnapshotEntry[] | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const currentBlob = () => {
-    try { return localStorage.getItem(STORAGE_KEY_V2) ?? localStorage.getItem(LEGACY_KEY_V2) ?? ""; } catch { return ""; }
+  const parse = (raw: string) => {
+    try { return sanitize(JSON.parse(raw)); } catch { return null; }
   };
-
   const summary = (raw: string) => {
-    const clean = sanitize((() => { try { return JSON.parse(raw); } catch { return null; } })());
-    if (!clean) return null;
-    return `${clean.config.people.length} people · ${clean.config.chores.length} chores · ${clean.history.length} archived months`;
+    const clean = parse(raw);
+    return clean ? describe(clean) : null;
   };
 
-  const exportNow = async () => {
-    const blob = currentBlob();
+  // A home-screen app hides the URL bar, so this is the only way to see which
+  // address a board actually belongs to. A per-deploy Vercel URL here means
+  // every deploy hands you a fresh, empty board.
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const looksEphemeral = /-[a-z0-9]{8,}-[^.]*\.vercel\.app$/i.test(origin);
+
+  const since = daysSinceBackup();
+  const staleNote =
+    since === null
+      ? "No backup file downloaded yet."
+      : since === 0
+        ? "Backed up today."
+        : `Last backup ${since} day${since === 1 ? "" : "s"} ago.`;
+
+  // ── the copy that crosses origins
+  const saveFile = () => {
+    const blob = currentRaw();
+    if (!blob) { setStatus("Nothing to back up yet."); return; }
+    setStatus(downloadBackup(blob)
+      ? "Saved. Keep it in Files or iCloud Drive — that copy survives a new URL or a new iPad."
+      : "Couldn't start the download. Use COPY BACKUP below instead.");
+  };
+
+  const loadFile = async (f: File | null) => {
+    if (!f) return;
+    const raw = await f.text();
+    if (!parse(raw)) { setStatus("That file doesn't look like a backup."); return; }
+    setText(raw);
+    setArmed(false);
+    setStatus("File loaded. Press IMPORT & REPLACE to apply it.");
+  };
+
+  // ── clipboard fallback, unchanged in spirit
+  const copyNow = async () => {
+    const blob = currentRaw() ?? "";
     setText(blob);
     try {
       await navigator.clipboard.writeText(blob);
-      setStatus("Copied to clipboard. Paste it into Notes, Messages, or the new device.");
+      markBackedUp();
+      setStatus("Copied. Paste it into Notes, Messages, or the new device.");
     } catch {
       setStatus("Select the text below and copy it.");
     }
   };
 
   const importNow = () => {
-    const clean = sanitize((() => { try { return JSON.parse(text); } catch { return null; } })());
+    const clean = parse(text);
     if (!clean) { setStatus("That doesn't look like a valid backup."); setArmed(false); return; }
-    if (!armed) { setArmed(true); setStatus(`Replace this device's board with: ${summary(text)}?`); return; }
+    if (!armed) { setArmed(true); setStatus(`Replace this device's board with: ${describe(clean)}?`); return; }
     saveAll(clean);
     // The simplest correct rehydration: every hook reloads from storage.
     location.reload();
+  };
+
+  const restoreSnap = (e: SnapshotEntry) => {
+    setText(e.raw);
+    setArmed(false);
+    const sum = summary(e.raw);
+    setStatus(sum
+      ? `Loaded ${e.label}. Press IMPORT & REPLACE to apply it.`
+      : `${e.label} can't be read automatically — the raw text is in the box for hand-editing.`);
   };
 
   return (
@@ -387,11 +439,59 @@ function DataSection({ open, head }: { open: boolean; head: React.ReactNode }) {
       {open && (
       <div className="set-form" style={{ paddingTop: 6 }}>
         <div className="set-hint">
-          Your board lives only on this device. Back it up before changing bookmarks or devices.
+          Your board lives only in this browser, on this exact web address. A different
+          address — a preview build, a renamed project, a re-added home screen icon —
+          is a different, empty board. A downloaded file is the only copy that follows you.
         </div>
+        <div className="set-hint" style={{ color: looksEphemeral ? "var(--red)" : undefined }}>
+          This board belongs to: {origin || "unknown"}
+          {looksEphemeral
+            ? " — that is a one-off deploy address, so the next deploy will give you a different, empty board. Download a backup now, then open the permanent address and restore it there."
+            : ""}
+        </div>
+
         <div className="set-toggle">
-          <button className="set-btn sel" onClick={exportNow}>[ COPY BACKUP ]</button>
+          <button className="set-btn sel" onClick={saveFile}>[ DOWNLOAD BACKUP FILE ]</button>
+          <button className="set-btn" onClick={() => fileRef.current?.click()}>[ RESTORE FROM FILE ]</button>
         </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json,text/plain"
+          style={{ display: "none" }}
+          onChange={(e) => { void loadFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
+        />
+        <div className="set-hint">
+          {staleNote}{since !== null && since >= BACKUP_STALE_DAYS ? " Worth doing again." : ""}
+        </div>
+
+        <div className="set-toggle">
+          <button
+            className="set-btn"
+            onClick={() => setSnaps(snaps ? null : listSnapshots())}
+          >{snaps ? "[ HIDE EARLIER COPIES ]" : "[ EARLIER COPIES ON THIS DEVICE ]"}</button>
+        </div>
+        {snaps && (
+          <div className="set-hint">
+            {snaps.length === 0
+              ? "No earlier copies found on this device."
+              : "Everything this browser still holds — daily auto-copies plus any board left behind by an earlier version of the app. None of these survive a new web address; only a downloaded file does."}
+          </div>
+        )}
+        {snaps?.map((e) => (
+          <div key={e.key} className="set-toggle">
+            <button className="set-btn" onClick={() => restoreSnap(e)}>
+              {e.label}{summary(e.raw) ? ` · ${summary(e.raw)}` : ""}
+            </button>
+            {!e.protected && (
+              <button
+                className="set-btn danger"
+                onClick={() => { deleteSnapshot(e.key); setSnaps(listSnapshots()); }}
+              >[ DELETE ]</button>
+            )}
+          </div>
+        ))}
+
         <label className="set-label">Backup text (paste here to restore)
           <textarea
             className="set-input set-textarea"
@@ -401,6 +501,9 @@ function DataSection({ open, head }: { open: boolean; head: React.ReactNode }) {
             placeholder="Paste a backup here…"
           />
         </label>
+        <div className="set-toggle">
+          <button className="set-btn" onClick={copyNow}>[ COPY BACKUP ]</button>
+        </div>
         {text.trim() !== "" && summary(text) && (
           <div className="set-hint">Contains: {summary(text)}</div>
         )}
@@ -418,7 +521,6 @@ function DataSection({ open, head }: { open: boolean; head: React.ReactNode }) {
   );
 }
 
-// ── PAGE ───────────────────────────────────────────────────────────────────
 export default function SettingsPage({
   config,
   onUpdate,

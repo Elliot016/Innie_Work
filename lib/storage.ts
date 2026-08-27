@@ -13,12 +13,12 @@ import {
   PeriodLogV2,
   PersistedV2,
   Person,
-  LEGACY_KEY_V2,
   STORAGE_KEY_V2,
   emptyPeriod,
 } from "./model";
 import { monthStr, todayStr, weekStartStr } from "./time";
 import { migrateV1 } from "./migrate";
+import { currentRaw, quarantine, snapshotBeforeWrite } from "./backup";
 
 // Fill in anything missing or malformed so a corrupt blob can never crash
 // render. Unknown fields are dropped; wrong-typed fields get defaults.
@@ -173,25 +173,43 @@ function periodHasData(p: PeriodLogV2): boolean {
   return Object.keys(p.tallies).length > 0;
 }
 
-// v2 blob → sanitize; else migrate v1 keys; else null (true first run).
-export function loadAll(): PersistedV2 | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_V2) ?? localStorage.getItem(LEGACY_KEY_V2);
-    if (raw) {
-      const clean = sanitize(JSON.parse(raw));
-      if (clean) return clean;
+// Distinguishing "nothing here yet" from "something is here but I can't read
+// it" is the whole point: the two look identical to the caller otherwise, and
+// treating the second as the first is what silently destroys a board.
+export type LoadResult =
+  | { status: "ok"; data: PersistedV2 }
+  | { status: "migrated"; data: PersistedV2 }
+  | { status: "empty" }
+  | { status: "corrupt"; quarantineKey: string | null };
+
+// v2 blob → sanitize; else migrate v1 keys; else empty (true first run).
+export function loadAll(): LoadResult {
+  const raw = currentRaw();
+  if (raw) {
+    let clean: PersistedV2 | null = null;
+    try {
+      clean = sanitize(JSON.parse(raw));
+    } catch {
+      clean = null;
     }
-  } catch {}
+    if (clean) return { status: "ok", data: clean };
+    // There was a board here and we couldn't read it. Put the original
+    // somewhere safe before anything else gets a chance to write over it,
+    // and do NOT fall through to the v1 migration — that path calls saveAll.
+    return { status: "corrupt", quarantineKey: quarantine(raw) };
+  }
   const migrated = migrateV1();
   if (migrated) {
     saveAll(migrated);
-    return migrated;
+    return { status: "migrated", data: migrated };
   }
-  return null;
+  return { status: "empty" };
 }
 
 export function saveAll(data: PersistedV2): void {
   try {
+    // Keep one copy of the day's starting state before today's writes bury it.
+    snapshotBeforeWrite();
     localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(data));
   } catch {}
 }

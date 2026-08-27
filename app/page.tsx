@@ -34,6 +34,7 @@ import {
   sinceText,
 } from "@/lib/logic";
 import { loadAll, saveAll } from "@/lib/storage";
+import { backupIsStale, requestPersistence } from "@/lib/backup";
 import DigitField from "./components/DigitField";
 import CompleteOverlay from "./components/CompleteOverlay";
 import Onboarding from "./components/Onboarding";
@@ -124,6 +125,9 @@ export default function Home() {
   const [page, setPage] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  // "stale" = no downloaded backup in a fortnight; "corrupt" = we found a
+  // board we couldn't read and set it aside instead of overwriting it.
+  const [dataAlert, setDataAlert] = useState<"stale" | "corrupt" | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastSeen = useRef<Set<string>>(new Set());
   const toastBaseline = useRef(false);
@@ -203,8 +207,10 @@ export default function Home() {
 
   // Load (v2 blob, else migrated v1, else seed the template) on mount.
   useEffect(() => {
-    const data = loadAll();
-    if (data) {
+    requestPersistence();
+    const res = loadAll();
+    if (res.status === "ok" || res.status === "migrated") {
+      const data = res.data;
       // One-and-done chores completed on an earlier day disappear for good.
       const today = todayStr();
       const stale = new Set(
@@ -233,10 +239,31 @@ export default function Home() {
         setMonthly(emptyPeriod(monthStr()));
       }
     } else {
+      // "corrupt" also lands here — the board can't render without data, so
+      // onboarding still runs. The original was already set aside by loadAll,
+      // and Settings › Data lists it as a restorable copy.
+      if (res.status === "corrupt") setDataAlert("corrupt");
       setNeedsOnboarding(true);
     }
+    // Only nag someone who actually has a board to lose.
+    if (res.status === "ok" && backupIsStale()) setDataAlert("stale");
     setLoaded(true);
   }, []);
+
+  // Storage problems ride the same queue as every other message. Deferred a
+  // beat so it lands after the board paints rather than fighting it.
+  useEffect(() => {
+    if (!loaded || !dataAlert) return;
+    const t = setTimeout(() => {
+      setToasts((q) => [...q, dataAlert === "corrupt"
+        ? { key: "data:corrupt", title: "EARLIER BOARD SET ASIDE",
+            sub: "unreadable — restore it in settings › data", color: "#e07070" }
+        : { key: "data:stale", title: "BACK UP YOUR BOARD",
+            sub: "settings › data › download backup file", color: "#e0c060" }]);
+      setDataAlert(null);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [loaded, dataAlert]);
 
   // Tick once a minute; when the calendar day actually rolls over, update dayKey.
   useEffect(() => {
@@ -498,6 +525,19 @@ export default function Home() {
     );
   }
 
+  // Overdue first, then aging, then everything else, with finished chores
+  // sinking to the bottom — the board reads as a to-do list. The original
+  // index rides along because handlers and refs are keyed on it.
+  const rankOf = (c: ChoreState) => {
+    const isDone = c.def.kind === "daily" ? dailyDone(c, people) : c.done;
+    if (isDone) return 3;
+    const u = getUrgency(c);
+    return u === "red" ? 0 : u === "yellow" ? 1 : 2;
+  };
+  const boardOrder = chores
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => rankOf(a.c) - rankOf(b.c) || a.i - b.i);
+
   // ── Progress
   const dailyChores = chores.filter((c) => c.def.kind === "daily");
   const overall = overallPct(config.bins, chores, people, config.scoring) ?? 0;
@@ -702,14 +742,14 @@ export default function Home() {
         </div>
 
         <div className="board-grid">
-          {chores.map((c, i) => {
+          {boardOrder.map(({ c, i }) => {
             const urg = getUrgency(c);
             const assignees = resolveAssignees(c.def, people);
             if (c.def.kind === "daily") {
               const full = dailyDone(c, people);
               return (
                 <div key={c.def.id} className={`card-wrap ${c.expanded ? "has-panel" : ""}`}>
-                  <div className={`task-card${full ? " chore-done" : ""}`} onClick={() => toggleCard(i)}>
+                  <div className={`task-card kind-daily${full ? " chore-done" : ""}`} onClick={() => toggleCard(i)}>
                     {c.def.icon && (
                       <div className="card-image-bg" style={{ backgroundImage: `url(${c.def.icon})` }} />
                     )}

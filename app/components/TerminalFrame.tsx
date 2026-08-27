@@ -50,7 +50,6 @@ export default function TerminalFrame({
           <img src="/pp-atom.png" alt="" className="term-logo-img" />
         </div>
       </header>
-      <div className="term-hex" aria-hidden>0x137056 : 0x09B32E</div>
     </>
   );
 }
