@@ -918,6 +918,38 @@ body {
 .ov-header .page-nav { margin-top: 2px; }
 
 /* Settings helper + warning lines */
+/* The origin readout is a diagnostic, not a footnote: on a home-screen app the
+   URL bar is hidden, so this line is the only way to tell which address a board
+   belongs to. Styled as its own panel because at .set-hint size it read as the
+   tail of the paragraph above it. */
+.set-origin {
+  border: 1px solid var(--term-line-soft);
+  border-left: 3px solid var(--daily);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 2px 0 4px;
+  background: color-mix(in srgb, var(--daily) 6%, transparent);
+}
+.set-origin.bad {
+  border-color: color-mix(in srgb, var(--red) 45%, transparent);
+  border-left-color: var(--red);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+.set-origin-label {
+  font-size: 0.55rem; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--term-dim); margin-bottom: 3px;
+}
+.set-origin-url {
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 0.78rem; font-weight: 700; line-height: 1.3;
+  color: var(--daily); word-break: break-all;
+}
+.set-origin.bad .set-origin-url { color: var(--red); }
+.set-origin-warn {
+  margin-top: 6px; font-size: 0.6rem; line-height: 1.5;
+  color: var(--red); font-weight: 600;
+}
+
 .set-hint {
   font-size: 0.55rem; color: var(--term-dim);
   letter-spacing: 0.1em; text-transform: uppercase; line-height: 1.5;

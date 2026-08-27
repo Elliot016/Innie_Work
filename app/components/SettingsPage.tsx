@@ -443,11 +443,16 @@ function DataSection({ open, head }: { open: boolean; head: React.ReactNode }) {
           address — a preview build, a renamed project, a re-added home screen icon —
           is a different, empty board. A downloaded file is the only copy that follows you.
         </div>
-        <div className="set-hint" style={{ color: looksEphemeral ? "var(--red)" : undefined }}>
-          This board belongs to: {origin || "unknown"}
-          {looksEphemeral
-            ? " — that is a one-off deploy address, so the next deploy will give you a different, empty board. Download a backup now, then open the permanent address and restore it there."
-            : ""}
+        <div className={`set-origin${looksEphemeral ? " bad" : ""}`}>
+          <div className="set-origin-label">This board belongs to</div>
+          <div className="set-origin-url">{origin || "unknown"}</div>
+          {looksEphemeral && (
+            <div className="set-origin-warn">
+              That is a one-off deploy address, so the next deploy gives you a different,
+              empty board. Download a backup now, then open the permanent address and
+              restore it there.
+            </div>
+          )}
         </div>
 
         <div className="set-toggle">
