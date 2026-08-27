@@ -1,4 +1,4 @@
-import { LEGACY_KEY_V2, PersistedV2, STORAGE_KEY_V2 } from "./model";
+import { LEGACY_KEY_V2, PeriodLogV2, PersistedV2, STORAGE_KEY_V2 } from "./model";
 import { todayStr } from "./time";
 import { migrateV1 } from "./migrate";
 
@@ -221,5 +221,26 @@ export function requestPersistence(): void {
 
 /** A one-line description of a blob, for confirming before you overwrite. */
 export function describe(data: PersistedV2): string {
-  return `${data.config.people.length} people · ${data.config.chores.length} chores · ${data.history.length} archived months`;
+  const bits = [
+    `${data.config.people.length} people`,
+    `${data.config.chores.length} chores`,
+  ];
+  // How much work a copy actually records is the thing you compare when
+  // deciding which one to keep — a board with more history is worth more than
+  // a board with more chores defined on it.
+  const logged = countLogged(data.monthly) + data.history.reduce((n, h) => n + countLogged(h), 0);
+  bits.push(`${logged} logged`);
+  if (data.history.length > 0) {
+    bits.push(`months: ${data.history.map((h) => h.period).join(", ")}`);
+  }
+  return bits.join(" · ");
+}
+
+function countLogged(p: PeriodLogV2 | undefined): number {
+  if (!p?.tallies) return 0;
+  let n = 0;
+  for (const rec of Object.values(p.tallies)) {
+    for (const v of Object.values(rec)) n += typeof v === "number" ? v : 0;
+  }
+  return n;
 }
