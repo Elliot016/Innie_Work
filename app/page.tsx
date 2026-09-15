@@ -7,6 +7,7 @@ import {
   PeriodLogV2,
   PersistedV2,
   Person,
+  SpaceData,
   emptyConfig,
   emptyPeriod,
   templateConfig,
@@ -45,6 +46,9 @@ export default function Home() {
   const [weekly, setWeekly] = useState<PeriodLogV2>(() => emptyPeriod(weekStartStr()));
   const [monthly, setMonthly] = useState<PeriodLogV2>(() => emptyPeriod(monthStr()));
   const [history, setHistory] = useState<PeriodLogV2[]>([]);
+  // Personal spaces ride along with the household blob. No UI reads them yet;
+  // carrying them through load → save is what keeps them from being dropped.
+  const [spaces, setSpaces] = useState<Record<string, SpaceData>>({});
   const [viewMonth, setViewMonth] = useState<string>(() => monthStr());
   const [page, setPage] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -102,6 +106,7 @@ export default function Home() {
         setHistory(archiveMonth(data.monthly, data.history));
         setMonthly(emptyPeriod(monthStr()));
       }
+      setSpaces(data.spaces);
     } else {
       // "corrupt" also lands here — the board can't render without data, so
       // onboarding still runs. The original was already set aside by loadAll,
@@ -201,9 +206,10 @@ export default function Home() {
       weekly,
       monthly,
       history,
+      spaces,
     };
     saveAll(data);
-  }, [config, chores, weekly, monthly, history, loaded, needsOnboarding]);
+  }, [config, chores, weekly, monthly, history, spaces, loaded, needsOnboarding]);
 
   // Apply a settings edit and rebuild the runtime chore list, carrying over
   // today's done-state for chores that survive the edit.

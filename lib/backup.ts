@@ -233,6 +233,16 @@ export function describe(data: PersistedV2): string {
   if (data.history.length > 0) {
     bits.push(`months: ${data.history.map((h) => h.period).join(", ")}`);
   }
+  // Personal spaces record work of their own; a copy that holds it is worth
+  // more than one that doesn't, so say so.
+  const spaces = Object.values(data.spaces ?? {});
+  if (spaces.length > 0) {
+    const personal = spaces.reduce(
+      (n, s) => n + countLogged(s.monthly) + s.history.reduce((m, h) => m + countLogged(h), 0),
+      0
+    );
+    bits.push(`${spaces.length} personal ${spaces.length === 1 ? "space" : "spaces"} · ${personal} personal logged`);
+  }
   return bits.join(" · ");
 }
 

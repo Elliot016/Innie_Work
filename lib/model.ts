@@ -112,6 +112,25 @@ export interface PersistedV2 {
   weekly: PeriodLogV2;
   monthly: PeriodLogV2;
   history: PeriodLogV2[];
+  // One personal space per person, keyed by personId. Missing = none yet.
+  spaces: Record<string, SpaceData>;
+}
+
+// ── Personal spaces
+//
+// A person's own board: their own bins, chores and tallies, run by the same
+// engine as the household board. Everything in a space belongs to its owner,
+// so chores here never carry assignees (empty = everyone = just the owner).
+// Household settings (celebration copy, scoring, display) are shared — see
+// spaceConfig().
+export interface SpaceData {
+  bins: Bin[];
+  chores: ChoreDefV2[];
+  savedDate: string;
+  choreState: ChoreDayState[];
+  weekly: PeriodLogV2;
+  monthly: PeriodLogV2;
+  history: PeriodLogV2[];
 }
 
 // Runtime chore state (def + day state + derived fields).
@@ -207,6 +226,40 @@ export function emptyConfig(people: Person[]): HouseholdConfig {
 
 export function emptyPeriod(period: string): PeriodLogV2 {
   return { period, tallies: {} };
+}
+
+// Starting bins for a personal space. Deliberately not the household set —
+// a person's own board is habits and projects, not pets and plants.
+export const PERSONAL_BINS: Bin[] = [
+  { id: "s1", num: "01", label: "DAILY", order: 0 },
+  { id: "s2", num: "02", label: "ROUTINE", order: 1 },
+  { id: "s3", num: "03", label: "PROJECTS", order: 2 },
+];
+
+export function emptySpace(today: string, weekStart: string, month: string): SpaceData {
+  return {
+    bins: PERSONAL_BINS.map((b) => ({ ...b })),
+    chores: [],
+    savedDate: today,
+    choreState: [],
+    weekly: emptyPeriod(weekStart),
+    monthly: emptyPeriod(month),
+    history: [],
+  };
+}
+
+// The config the board engine runs a personal space under: the owner is the
+// only person, the space supplies bins and chores, and the household's
+// celebration copy, scoring and display settings carry over unchanged.
+export function spaceConfig(household: HouseholdConfig, owner: Person, space: SpaceData): HouseholdConfig {
+  return {
+    people: [owner],
+    bins: space.bins,
+    chores: space.chores,
+    messages: household.messages,
+    scoring: household.scoring,
+    display: household.display,
+  };
 }
 
 export function periodTotal(p: PeriodLogV2): number {

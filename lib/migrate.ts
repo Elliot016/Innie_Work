@@ -109,5 +109,6 @@ export function migrateV1(): PersistedV2 | null {
     weekly,
     monthly,
     history,
+    spaces: {},
   };
 }
