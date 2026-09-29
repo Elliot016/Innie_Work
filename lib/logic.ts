@@ -80,6 +80,31 @@ export function buildChores(
     });
 }
 
+// One-and-done chores completed on an earlier day disappear for good. Runs
+// on load for the household and for every space, so a finished one-off can't
+// linger in a board nobody has opened since.
+export function stripStaleOnce(
+  chores: ChoreDefV2[],
+  choreState: ChoreDayState[],
+  today: string
+): { chores: ChoreDefV2[]; choreState: ChoreDayState[]; changed: boolean } {
+  const stale = new Set(
+    chores
+      .filter((c) => {
+        if (c.kind !== "once") return false;
+        const st = choreState.find((s) => s.id === c.id);
+        return !!st?.lastDoneDate && st.lastDoneDate < today;
+      })
+      .map((c) => c.id)
+  );
+  if (stale.size === 0) return { chores, choreState, changed: false };
+  return {
+    chores: chores.filter((c) => !stale.has(c.id)),
+    choreState: choreState.filter((s) => !stale.has(s.id)),
+    changed: true,
+  };
+}
+
 export function allPartsDone(c: ChoreState): boolean {
   return c.partsDone.every(Boolean);
 }

@@ -228,12 +228,32 @@ export function emptyPeriod(period: string): PeriodLogV2 {
   return { period, tallies: {} };
 }
 
+// ── The personal-space motif: a day is a loop, and doing the work is what
+// breaks the pattern. It shapes the bin names, the clearing lines, and the
+// celebration copy below; the household board keeps its own voice.
+export const SPACE_MOTTO = "Break the pattern today, or the loop will repeat tomorrow.";
+
+export const SPACE_MESSAGES: CelebrationMessages = {
+  completeTitle: "Pattern Broken",
+  completeTagline: "The loop resets tomorrow",
+  praiseTitle: "Loop broken, {name}",
+  praiseSub: "Today did not repeat.",
+};
+
 // Starting bins for a personal space. Deliberately not the household set —
 // a person's own board is habits and projects, not pets and plants.
 export const PERSONAL_BINS: Bin[] = [
-  { id: "s1", num: "01", label: "DAILY", order: 0 },
-  { id: "s2", num: "02", label: "ROUTINE", order: 1 },
-  { id: "s3", num: "03", label: "PROJECTS", order: 2 },
+  { id: "s1", num: "01", label: "LOOP",   order: 0, message: "Pattern broken" },
+  { id: "s2", num: "02", label: "CYCLES", order: 1, message: "Cycle closed" },
+  { id: "s3", num: "03", label: "BREAKS", order: 2, message: "Clean break" },
+];
+
+// A few starters so a brand-new space has something to log. All editable.
+export const PERSONAL_CHORES: ChoreDefV2[] = [
+  { id: "practice", name: "Practice",                       icon: null, binId: "s1", kind: "daily", cycleDays: 1, greenMax: 1, yellowMax: 1, order: 0, assignees: [] },
+  { id: "move",     name: "Move Your Body",                 icon: null, binId: "s1", kind: "daily", cycleDays: 1, greenMax: 1, yellowMax: 1, order: 1, assignees: [] },
+  { id: "reset",    name: "Reset Your Space",               icon: null, binId: "s2", kind: "cycle", cycleDays: 7, greenMax: 5, yellowMax: 6, order: 2, assignees: [] },
+  { id: "avoided",  name: "The Thing You Keep Putting Off", icon: null, binId: "s3", kind: "once",  cycleDays: 1, greenMax: 1, yellowMax: 1, order: 3, assignees: [] },
 ];
 
 export function emptySpace(today: string, weekStart: string, month: string): SpaceData {
@@ -248,15 +268,19 @@ export function emptySpace(today: string, weekStart: string, month: string): Spa
   };
 }
 
+export function templateSpace(today: string, weekStart: string, month: string): SpaceData {
+  return { ...emptySpace(today, weekStart, month), chores: PERSONAL_CHORES.map((c) => ({ ...c })) };
+}
+
 // The config the board engine runs a personal space under: the owner is the
-// only person, the space supplies bins and chores, and the household's
-// celebration copy, scoring and display settings carry over unchanged.
+// only person, the space supplies bins and chores, the celebration copy is
+// the motif's, and the household's scoring and display settings carry over.
 export function spaceConfig(household: HouseholdConfig, owner: Person, space: SpaceData): HouseholdConfig {
   return {
     people: [owner],
     bins: space.bins,
     chores: space.chores,
-    messages: household.messages,
+    messages: SPACE_MESSAGES,
     scoring: household.scoring,
     display: household.display,
   };
