@@ -116,8 +116,6 @@ export interface BoardProps {
   dayKey: string;
   // The page-nav strip, rendered at the right of the legend.
   nav: ReactNode;
-  // One quiet line after the people in the legend (a personal board's motto).
-  tagline?: string;
   flightRoot: HTMLElement | null;
   // A person logged (delta +1) or un-logged (delta -1) a chore: the parent
   // keeps the weekly/monthly tallies.
@@ -134,7 +132,6 @@ export default function Board({
   active,
   dayKey,
   nav,
-  tagline,
   flightRoot,
   onLog,
   onToasts,
@@ -540,7 +537,6 @@ export default function Board({
           {people.map((p) => (
             <span key={p.id}><span className="leg-dot" style={{ background: p.color }} />{p.name}</span>
           ))}
-          {tagline && <span className="leg-tag">{tagline}</span>}
           {nav}
         </div>
 

@@ -1,21 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ChoreState,
   HouseholdConfig,
   PeriodLogV2,
   PersistedV2,
   Person,
-  SPACE_MOTTO,
-  SpaceData,
   emptyConfig,
   emptyPeriod,
-  spaceConfig,
   templateConfig,
-  templateSpace,
 } from "@/lib/model";
-import { monthLabelOf, monthStr, todayStr, weekStartStr } from "@/lib/time";
-import { overallPct, stripStaleOnce } from "@/lib/logic";
+import {
+  computeDaysAgo,
+  monthLabelOf,
+  monthStr,
+  todayStr,
+  weekStartStr,
+} from "@/lib/time";
+import { archiveMonth, buildChores, overallPct } from "@/lib/logic";
 import { loadAll, saveAll } from "@/lib/storage";
 import { backupIsStale, requestPersistence } from "@/lib/backup";
 import Board from "./components/Board";
@@ -26,8 +29,6 @@ import SettingsPage from "./components/SettingsPage";
 import Screensaver from "./components/Screensaver";
 import ToastOverlay, { type Toast } from "./components/ToastOverlay";
 import TerminalFrame from "./components/TerminalFrame";
-import WhoGate, { NOBODY, type Viewer } from "./components/WhoGate";
-import { useChoreEngine } from "./hooks/useChoreEngine";
 import { useIdle } from "./hooks/useIdle";
 import { useWakeLock } from "./hooks/useWakeLock";
 
@@ -40,10 +41,10 @@ const DEFAULT_PEOPLE: Person[] = [
 
 export default function Home() {
   const [config, setConfig] = useState<HouseholdConfig>(() => templateConfig(DEFAULT_PEOPLE));
-  // Personal spaces, keyed by person id. The one being viewed also runs live
-  // in `personal` below; its running state folds back in here on leaving.
-  const [spaces, setSpaces] = useState<Record<string, SpaceData>>({});
-  const [viewer, setViewer] = useState<Viewer>(NOBODY);
+  const [chores, setChores] = useState<ChoreState[]>([]);
+  const [weekly, setWeekly] = useState<PeriodLogV2>(() => emptyPeriod(weekStartStr()));
+  const [monthly, setMonthly] = useState<PeriodLogV2>(() => emptyPeriod(monthStr()));
+  const [history, setHistory] = useState<PeriodLogV2[]>([]);
   const [viewMonth, setViewMonth] = useState<string>(() => monthStr());
   const [page, setPage] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -62,64 +63,45 @@ export default function Home() {
   // Where the board mounts its fixed overlay (flying letters + bin dock).
   const [flightRoot, setFlightRoot] = useState<HTMLDivElement | null>(null);
 
-  // Two running chore lists: the household's, always loaded, and one for
-  // whichever person is viewing their own space.
-  const household = useChoreEngine({
-    dayKey,
-    onRemoveChores: (ids) =>
-      setConfig((prev) => ({ ...prev, chores: prev.chores.filter((c) => !ids.has(c.id)) })),
-    onRollover: () => setCelebrateShown(false),
-  });
-  const personal = useChoreEngine({
-    dayKey,
-    onRemoveChores: (ids) => {
-      if (viewer.kind !== "person") return;
-      const id = viewer.id;
-      setSpaces((s) =>
-        s[id] ? { ...s, [id]: { ...s[id], chores: s[id].chores.filter((c) => !ids.has(c.id)) } } : s
-      );
-    },
-  });
-
-  // What's on screen: a person's space, or the household (also while the
-  // gate is up, so there's a board behind it).
-  const owner = viewer.kind === "person" ? config.people.find((p) => p.id === viewer.id) ?? null : null;
-  const space = owner ? spaces[owner.id] ?? null : null;
-  // Memoised: the board treats a new config identity as a settings edit and
-  // rebaselines its messages, so this must only change when the data does.
-  const spaceCfg = useMemo(
-    () => (owner && space ? spaceConfig(config, owner, space) : null),
-    [config, owner, space]
-  );
-  const inSpace = spaceCfg !== null;
-  const active = inSpace
-    ? { key: owner!.id, config: spaceCfg, engine: personal }
-    : { key: "household", config, engine: household };
-  const people = active.config.people;
+  const people = config.people;
 
   const dateStr = new Date().toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric",
   }).toUpperCase();
 
   // Load (v2 blob, else migrated v1, else seed the template) on mount.
-  const loadHousehold = household.load;
   useEffect(() => {
     requestPersistence();
     const res = loadAll();
     if (res.status === "ok" || res.status === "migrated") {
       const data = res.data;
+      // One-and-done chores completed on an earlier day disappear for good.
       const today = todayStr();
-      const stripped = stripStaleOnce(data.config.chores, data.choreState, today);
-      const cfg = stripped.changed ? { ...data.config, chores: stripped.chores } : data.config;
-      setConfig(cfg);
-      loadHousehold(cfg, { ...data, choreState: stripped.choreState });
-      // Same cleanup for every space, opened or not.
-      const cleaned: Record<string, SpaceData> = {};
-      for (const [id, sp] of Object.entries(data.spaces)) {
-        const st = stripStaleOnce(sp.chores, sp.choreState, today);
-        cleaned[id] = st.changed ? { ...sp, chores: st.chores, choreState: st.choreState } : sp;
+      const stale = new Set(
+        data.config.chores
+          .filter((c) => {
+            if (c.kind !== "once") return false;
+            const st = data.choreState.find((s) => s.id === c.id);
+            return !!st?.lastDoneDate && st.lastDoneDate < today;
+          })
+          .map((c) => c.id)
+      );
+      if (stale.size > 0) {
+        data.config = { ...data.config, chores: data.config.chores.filter((c) => !stale.has(c.id)) };
+        data.choreState = data.choreState.filter((s) => !stale.has(s.id));
       }
-      setSpaces(cleaned);
+      setConfig(data.config);
+      setChores(buildChores(data.config, data));
+      setWeekly(data.weekly.period === weekStartStr() ? data.weekly : emptyPeriod(weekStartStr()));
+      if (data.monthly.period === monthStr()) {
+        setMonthly(data.monthly);
+        setHistory(data.history);
+      } else {
+        // Months turned over while the app was closed: file the finished one
+        // away instead of dropping it, and start this month at zero.
+        setHistory(archiveMonth(data.monthly, data.history));
+        setMonthly(emptyPeriod(monthStr()));
+      }
     } else {
       // "corrupt" also lands here — the board can't render without data, so
       // onboarding still runs. The original was already set aside by loadAll,
@@ -130,7 +112,7 @@ export default function Home() {
     // Only nag someone who actually has a board to lose.
     if (res.status === "ok" && backupIsStale()) setDataAlert("stale");
     setLoaded(true);
-  }, [loadHousehold]);
+  }, []);
 
   // Storage problems ride the same queue as every other message. Deferred a
   // beat so it lands after the board paints rather than fighting it.
@@ -156,112 +138,145 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  // Leaving a person's board (idle, or the logo tap): fold its running state
-  // back into `spaces` so the next save and the next visit both see it.
-  const leaveSpace = () => {
-    if (viewer.kind !== "person") return;
-    const id = viewer.id;
-    const saved = personal.toSaved();
-    setSpaces((s) => (s[id] ? { ...s, [id]: { ...s[id], ...saved } } : s));
-  };
-  const leaveRef = useRef(leaveSpace);
-  useEffect(() => { leaveRef.current = leaveSpace; });
-
   // Idle screensaver + keep the wall panel awake. The saver never covers
   // onboarding or the celebration; those are dismissed first, and that tap
-  // counts as activity. Going idle also forgets who was viewing, so waking
-  // the panel asks "who are you?" again.
-  const { idle, wake, sleep } = useIdle(config.display.screensaverMin * 60_000, () => {
-    leaveRef.current();
-    setViewer(NOBODY);
-  });
+  // counts as activity.
+  const { idle, wake, sleep } = useIdle(config.display.screensaverMin * 60_000);
   useWakeLock(true);
   const saverShown = idle && loaded && !needsOnboarding && !celebrateShown;
-  const gateShown = loaded && !needsOnboarding && viewer.kind === "none";
 
-  // Persist the whole household in one atomic blob. The space being viewed
-  // is written from its live engine, the rest from `spaces`.
-  const householdSaved = household.toSaved;
-  const personalSaved = personal.toSaved;
+  // Latest monthly tally, readable from the rollover effect without re-running it.
+  const monthlyRef = useRef(monthly);
+  useEffect(() => { monthlyRef.current = monthly; }, [monthly]);
+
+  // When the day changes while the app is open, roll everything over live.
+  const rolloverDayRef = useRef(dayKey);
+  useEffect(() => {
+    if (!loaded) return;
+    if (rolloverDayRef.current === dayKey) return;
+    rolloverDayRef.current = dayKey;
+    setCelebrateShown(false);
+    // Completed one-and-done chores leave the board with the old day.
+    const doneOnce = new Set(
+      chores.filter((c) => c.def.kind === "once" && c.done).map((c) => c.def.id)
+    );
+    if (doneOnce.size > 0) {
+      setConfig((prev) => ({ ...prev, chores: prev.chores.filter((c) => !doneOnce.has(c.id)) }));
+    }
+    setChores((prev) =>
+      prev
+        .filter((c) => !doneOnce.has(c.def.id))
+        .map((c) => {
+          if (c.def.kind === "daily") return { ...c, doneBy: {}, expanded: false };
+          if (c.def.kind === "once") return { ...c, expanded: false };
+          const daysAgo = computeDaysAgo(c.lastDoneDate);
+          return { ...c, daysAgo, done: daysAgo === 0, expanded: false };
+        })
+    );
+    setWeekly((prev) => (prev.period === weekStartStr() ? prev : emptyPeriod(weekStartStr())));
+    const m = monthStr();
+    const finished = monthlyRef.current;
+    if (finished.period !== m) {
+      setHistory((prev) => archiveMonth(finished, prev));
+      setMonthly(emptyPeriod(m));
+      setViewMonth((prev) => (prev === finished.period ? prev : m));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey, loaded]);
+
+  // Persist the whole household in one atomic blob.
   useEffect(() => {
     if (!loaded || needsOnboarding) return;
-    const live = viewer.kind === "person" && spaces[viewer.id]
-      ? { ...spaces, [viewer.id]: { ...spaces[viewer.id], ...personalSaved() } }
-      : spaces;
     const data: PersistedV2 = {
       schemaVersion: 2,
       config,
-      ...householdSaved(),
-      spaces: live,
+      savedDate: todayStr(),
+      choreState: chores.map((c) => ({
+        id: c.def.id,
+        doneBy: c.doneBy,
+        lastDoneDate: c.lastDoneDate,
+        lastBy: c.lastBy,
+        partsDone: c.partsDone,
+      })),
+      weekly,
+      monthly,
+      history,
     };
     saveAll(data);
-  }, [config, spaces, viewer, householdSaved, personalSaved, loaded, needsOnboarding]);
+  }, [config, chores, weekly, monthly, history, loaded, needsOnboarding]);
 
   // Apply a settings edit and rebuild the runtime chore list, carrying over
   // today's done-state for chores that survive the edit.
   function updateConfig(mutate: (cfg: HouseholdConfig) => HouseholdConfig) {
     const next = mutate(config);
     setConfig(next);
-    household.rebuild(next);
+    setChores((prev) =>
+      buildChores(next, {
+        savedDate: todayStr(),
+        choreState: prev.map((c) => {
+          // A chore switched to one-and-done starts pending — without this it
+          // would inherit the cycle seed date and be born already "done".
+          const nextDef = next.chores.find((d) => d.id === c.def.id);
+          const becameOnce = nextDef?.kind === "once" && c.def.kind !== "once";
+          return {
+            id: c.def.id,
+            doneBy: c.doneBy,
+            lastDoneDate: becameOnce ? null : c.lastDoneDate,
+            lastBy: becameOnce ? null : c.lastBy,
+            partsDone: c.partsDone,
+          };
+        }),
+      })
+    );
   }
 
   function completeOnboarding(newPeople: Person[], mode: "template" | "empty") {
     const cfg = mode === "template" ? templateConfig(newPeople) : emptyConfig(newPeople);
     setConfig(cfg);
-    household.load(cfg, null);
+    setChores(buildChores(cfg, null));
     setNeedsOnboarding(false);
   }
 
-  // The gate's answer. A person with no space yet gets one from the template.
-  function chooseViewer(v: Viewer) {
-    if (v.kind === "person") {
-      const who = config.people.find((p) => p.id === v.id);
-      if (!who) return;
-      const today = todayStr();
-      let sp = spaces[v.id] ?? templateSpace(today, weekStartStr(), monthStr());
-      // A space not opened across a day change still needs its finished
-      // one-offs cleared; the engine only rolls over while loaded.
-      const st = stripStaleOnce(sp.chores, sp.choreState, today);
-      if (st.changed) sp = { ...sp, chores: st.chores, choreState: st.choreState };
-      if (sp !== spaces[v.id]) setSpaces((s) => ({ ...s, [v.id]: sp }));
-      personal.load(spaceConfig(config, who, sp), sp);
-    }
-    setPage(0);
-    setViewer(v);
-  }
 
-  // The header logo: back to the question.
-  function askAgain() {
-    leaveSpace();
-    setViewer(NOBODY);
+  // Adjust this week's AND this month's tally for a person/chore (clamped at 0).
+  function bump(choreId: string, personId: string, delta: number) {
+    const apply = (base: PeriodLogV2): PeriodLogV2 => {
+      const rec = base.tallies[personId] ?? {};
+      const next = Math.max(0, (rec[choreId] ?? 0) + delta);
+      return { ...base, tallies: { ...base.tallies, [personId]: { ...rec, [choreId]: next } } };
+    };
+    setWeekly((prev) => apply(prev.period === weekStartStr() ? prev : emptyPeriod(weekStartStr())));
+    setMonthly((prev) => {
+      if (prev.period === monthStr()) return apply(prev);
+      // Month turned over between the last render and this tap — archive it
+      // rather than let the fresh tally overwrite it.
+      setHistory((h) => archiveMonth(prev, h));
+      return apply(emptyPeriod(monthStr()));
+    });
   }
 
   // The header percentage; the board computes the same number for itself.
-  const overall = overallPct(active.config.bins, active.engine.chores, people, active.config.scoring) ?? 0;
-  const who = viewer.kind === "person" ? owner?.name ?? null : viewer.kind === "household" ? "Household" : null;
+  const overall = overallPct(config.bins, chores, people, config.scoring) ?? 0;
 
   // ── Overview totals
   const personSum = (log: PeriodLogV2, personId: string) =>
     Object.values(log.tallies[personId] ?? {}).reduce((a, b) => a + b, 0);
   const thisMonth = monthStr();
-  const monthOptions = [thisMonth, ...active.engine.history.map((h) => h.period).filter((p) => p !== thisMonth)]
+  const monthOptions = [thisMonth, ...history.map((h) => h.period).filter((p) => p !== thisMonth)]
     .sort()
     .reverse();
   const shownMonth = monthOptions.includes(viewMonth) ? viewMonth : thisMonth;
   const monthIdx = monthOptions.indexOf(shownMonth);
   const isThisMonth = shownMonth === thisMonth;
   const shownLog = isThisMonth
-    ? active.engine.monthly
-    : active.engine.history.find((h) => h.period === shownMonth) ?? emptyPeriod(shownMonth);
+    ? monthly
+    : history.find((h) => h.period === shownMonth) ?? emptyPeriod(shownMonth);
   const monthLabel = monthLabelOf(shownMonth);
   const weekLabel = `WEEK OF ${new Date(weekStartStr() + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()}`;
 
   // ── Swipe (native listeners so Safari doesn't suppress them)
-  const pageCount = inSpace ? 2 : 3; // a personal view has no settings page
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
-  const pageCountRef = useRef(pageCount);
-  useEffect(() => { pageCountRef.current = pageCount; }, [pageCount]);
 
   useEffect(() => {
     const el = pagesRef.current;
@@ -271,7 +286,7 @@ export default function Home() {
     const onEnd = (e: TouchEvent) => {
       const diff = startX - e.changedTouches[0].clientX;
       if (Math.abs(diff) < 30) return;
-      if (diff > 0) setPage(Math.min(pageCountRef.current - 1, pageRef.current + 1));
+      if (diff > 0) setPage(Math.min(2, pageRef.current + 1));
       if (diff < 0) setPage(Math.max(0, pageRef.current - 1));
     };
     el.addEventListener("touchstart", onStart, { passive: true });
@@ -293,12 +308,12 @@ export default function Home() {
         )}
       </span>
       <span className="page-dots">
-        {Array.from({ length: pageCount }, (_, n) => (
+        {[0, 1, 2].map((n) => (
           <span key={n} className={`dot ${page === n ? "active" : ""}`} onClick={() => setPage(n)} style={{ cursor: "pointer" }} />
         ))}
       </span>
       <span className="nav-slot next">
-        {page < pageCount - 1 && (
+        {page < 2 && (
           <button className="nav-btn" onClick={() => setPage(page + 1)}>{PAGE_NAMES[page + 1]} →</button>
         )}
       </span>
@@ -308,21 +323,19 @@ export default function Home() {
   return (
     <div className="clip-wrap scanlines">
     <DigitField />
-    <TerminalFrame dateStr={dateStr} who={who} pct={overall} onLogoTap={askAgain} />
+    <TerminalFrame dateStr={dateStr} pct={overall} />
     <div ref={pagesRef} className="pages">
       {/* ── PAGE 1: BOARD ── */}
       <Board
-        key={active.key}
-        config={active.config}
-        chores={active.engine.chores}
-        setChores={active.engine.setChores}
+        config={config}
+        chores={chores}
+        setChores={setChores}
         loaded={loaded}
         active={page === 0}
         dayKey={dayKey}
         nav={pageNav}
-        tagline={inSpace ? SPACE_MOTTO : undefined}
         flightRoot={flightRoot}
-        onLog={active.engine.bump}
+        onLog={bump}
         onToasts={pushToasts}
         onCelebrate={celebrate}
       />
@@ -348,7 +361,7 @@ export default function Home() {
               {people.map((p) => (
                 <div key={p.id} className="scorecard" style={{ borderColor: p.color }}>
                   <div className="sc-name" style={{ color: p.color }}>{p.name}</div>
-                  <div className="sc-num" style={{ color: p.color }}>{personSum(active.engine.weekly, p.id)}</div>
+                  <div className="sc-num" style={{ color: p.color }}>{personSum(weekly, p.id)}</div>
                   <div className="sc-label">chores logged</div>
                 </div>
               ))}
@@ -387,7 +400,7 @@ export default function Home() {
           <div className="ov-col-right">
             <div className="ov-section-label">By chore · {isThisMonth ? "this month" : monthLabel}</div>
             <div className="ov-table">
-              {active.config.chores.map((def) => {
+              {config.chores.map((def) => {
                 const counts = people.map((p) => shownLog.tallies[p.id]?.[def.id] ?? 0);
                 const max = Math.max(...counts, 1);
                 return (
@@ -417,8 +430,7 @@ export default function Home() {
 
         <div className="bottom-pad" />
       </div>
-      {/* ── PAGE 3: MANAGE (household only) ── */}
-      {!inSpace && (
+      {/* ── PAGE 3: MANAGE ── */}
       <div className={`page settings-page${page === 2 ? " page-active" : ""}`}>
         <div className="ov-header">
           <div className="header-top">
@@ -434,11 +446,9 @@ export default function Home() {
         <SettingsPage config={config} onUpdate={updateConfig} onPreviewScreensaver={sleep} />
         <div className="bottom-pad" />
       </div>
-      )}
     </div>
 
     {needsOnboarding && <Onboarding onComplete={completeOnboarding} />}
-    {gateShown && <WhoGate people={config.people} onChoose={chooseViewer} />}
     <CompleteOverlay
       show={celebrateShown}
       pct={celebratePct}
@@ -449,7 +459,7 @@ export default function Home() {
     {/* A toast waits its turn rather than expiring unseen under the
         celebration, the screensaver, or onboarding. */}
     <ToastOverlay
-      toast={celebrateShown || saverShown || needsOnboarding || gateShown ? null : toasts[0] ?? null}
+      toast={celebrateShown || saverShown || needsOnboarding ? null : toasts[0] ?? null}
       onDismiss={dismissToast}
     />
     <Screensaver show={saverShown} onDismiss={wake} />

@@ -3,19 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 
 // The CRT chrome: outer frame, scanline overlay, terminal header
-// (date · who | big % | house logo) and the footer hex string. Renders as
-// fixed overlays; the pages behind it pad to clear the header (--term-hdr-h)
-// and the bin dock. Tapping the logo asks "who are you?" again.
+// (date | big % | HOME globe) and the footer hex string. Renders as fixed
+// overlays; the pages behind it pad to clear the header (--term-hdr-h) and
+// the bin dock.
 export default function TerminalFrame({
   dateStr,
-  who,
   pct,
-  onLogoTap,
 }: {
   dateStr: string;
-  who: string | null;
   pct: number;
-  onLogoTap: () => void;
 }) {
   // Count-up tween toward the live percentage (snap under reduced motion).
   const [shown, setShown] = useState(pct);
@@ -46,17 +42,12 @@ export default function TerminalFrame({
       <div className="crt-frame" aria-hidden />
       <div className="scanlines" aria-hidden />
       <header className="term-hdr">
-        <div className="term-date">
-          {dateStr}
-          {who && <span className="term-who">· {who}</span>}
-        </div>
+        <div className="term-date">{dateStr}</div>
         <div className="term-pct">{shown}% COMPLETE</div>
-        <div className="term-logo">
+        <div className="term-logo" aria-hidden>
           {/* The house atom logo */}
-          <button className="term-logo-btn" onClick={onLogoTap} aria-label="Switch who is viewing">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/pp-atom.png" alt="" className="term-logo-img" />
-          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/pp-atom.png" alt="" className="term-logo-img" />
         </div>
       </header>
     </>

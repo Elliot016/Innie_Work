@@ -215,11 +215,6 @@ body {
   text-transform: uppercase;
 }
 .leg-dot { width: 7px; height: 7px; display: inline-block; margin-right: 5px; }
-/* A personal board's motto: quieter than the names, and first to give way. */
-.leg-tag {
-  color: var(--term-dim); opacity: 0.8; font-weight: 400; letter-spacing: 0.1em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
-}
 
 /* ── CARD GRID ── */
 .board-grid {
@@ -835,69 +830,6 @@ body {
   .onboard-box { animation: none; }
 }
 
-/* ── WHO ARE YOU? GATE ──
-   Sits over the chrome (crt-frame is 80) and under the screensaver (90), so
-   going idle while it's up just covers it, and waking reveals it again. */
-.gate {
-  position: fixed; inset: 0; z-index: 85;
-  display: flex; align-items: center; justify-content: center;
-  background: color-mix(in srgb, var(--term-bg) 93%, transparent);
-  padding: 20px;
-}
-.gate-box {
-  width: min(640px, 100%);
-  text-align: center;
-  animation: ob-in 0.5s ease both;
-}
-.gate-motto {
-  font-size: 0.62rem; letter-spacing: 0.24em; text-transform: uppercase;
-  color: var(--term-dim); line-height: 1.7;
-  margin-bottom: 22px;
-}
-.gate-q {
-  font-family: var(--font-display), 'VT323', monospace;
-  font-size: 2.8rem; letter-spacing: 0.12em; text-transform: uppercase;
-  text-shadow: var(--term-glow);
-  display: flex; align-items: center; justify-content: center; gap: 16px;
-  margin-bottom: 30px;
-}
-/* The logo is the cursor: a solid block that blinks like a terminal's. */
-.gate-cursor {
-  height: 0.9em; width: auto;
-  filter: invert(1) drop-shadow(0 0 4px rgba(180, 220, 255, 0.45));
-  animation: gate-blink 1.1s steps(2, end) infinite;
-}
-@keyframes gate-blink { 50% { opacity: 0; } }
-.gate-opts { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-.gate-btn {
-  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
-  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--term-fg);
-  background: transparent;
-  border: 1px solid var(--term-line);
-  border-radius: 6px;
-  padding: 15px 22px; min-width: 160px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.gate-btn:active {
-  background: color-mix(in srgb, var(--term-fg) 12%, transparent);
-  text-shadow: var(--term-glow);
-}
-.gate-btn.person { color: var(--pc); border-color: var(--pc); }
-.gate-btn.person:active {
-  background: color-mix(in srgb, var(--pc) 18%, transparent);
-  text-shadow: 0 0 6px color-mix(in srgb, var(--pc) 50%, transparent);
-}
-@media (max-width: 700px) {
-  .gate-q { font-size: 2.1rem; }
-  .gate-btn { min-width: 0; flex: 1 1 40%; padding: 14px 10px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .gate-box { animation: none; }
-  .gate-cursor { animation: none; }
-}
-
 /* ── CELEBRATION OVERLAY ── */
 .complete-ov {
   position: fixed; inset: 0; z-index: 110;
@@ -951,16 +883,6 @@ body {
   text-shadow: 0 0 6px color-mix(in srgb, var(--green) 45%, transparent);
 }
 .set-btn.done:active { background: color-mix(in srgb, var(--green) 25%, transparent); }
-
-/* "· NAME" after the date: who is looking at the terminal. */
-.term-who { color: var(--term-dim); margin-left: 8px; }
-
-/* The header logo is also the way back to "who are you?". */
-.term-logo-btn {
-  background: none; border: none; padding: 0; line-height: 0; cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.term-logo-btn:active .term-logo-img { filter: invert(1) drop-shadow(0 0 10px rgba(180, 220, 255, 0.9)); }
 
 /* Header logo: the house atom, inverted to phosphor white on navy */
 .term-logo-img {

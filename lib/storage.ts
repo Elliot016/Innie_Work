@@ -1,5 +1,4 @@
 import {
-  Bin,
   CelebrationMessages,
   ChoreDayState,
   ChoreDefV2,
@@ -10,12 +9,10 @@ import {
   DisplayConfig,
   HouseholdConfig,
   MAX_MESSAGE_LEN,
-  PERSONAL_BINS,
   ScoringConfig,
   PeriodLogV2,
   PersistedV2,
   Person,
-  SpaceData,
   STORAGE_KEY_V2,
   emptyPeriod,
 } from "./model";
@@ -23,137 +20,19 @@ import { monthStr, todayStr, weekStartStr } from "./time";
 import { migrateV1 } from "./migrate";
 import { currentRaw, quarantine, snapshotBeforeWrite } from "./backup";
 
-type Raw = Record<string, unknown>;
-const isObj = (v: unknown): v is Raw => !!v && typeof v === "object";
-const str = (v: unknown, fb: string) => (typeof v === "string" ? v : fb);
-const num = (v: unknown, fb: number) => (typeof v === "number" && isFinite(v) ? v : fb);
-
-function parseBins(raw: unknown): Bin[] {
-  if (!Array.isArray(raw)) return [];
-  return (raw as unknown[])
-    .filter(isObj)
-    .map((b, i) => ({
-      id: str(b.id, `bin${i}`),
-      num: str(b.num, String(i + 1).padStart(2, "0")),
-      label: str(b.label, `BIN ${i + 1}`),
-      order: num(b.order, i),
-      message: typeof b.message === "string" && b.message.trim() !== ""
-        ? b.message.trim().slice(0, MAX_MESSAGE_LEN)
-        : undefined,
-    }));
-}
-
-// `people` is who a chore may be assigned to or praise; anyone else is
-// dropped. For a personal space that's just the owner.
-function parseChores(raw: unknown, people: Person[], bins: Bin[]): ChoreDefV2[] {
-  if (!Array.isArray(raw)) return [];
-  return (raw as unknown[])
-    .filter(isObj)
-    .map((c, i) => {
-      const cycleDays = Math.max(1, num(c.cycleDays, 1));
-      // A message aimed at a deleted person takes the message with it —
-      // re-pointing it at "everyone" would show the wrong praise to all.
-      const wantsFor = typeof c.messageFor === "string" && c.messageFor !== "";
-      const msgFor = wantsFor && people.some((p) => p.id === c.messageFor)
-        ? (c.messageFor as string)
-        : undefined;
-      const dangling = wantsFor && !msgFor;
-      const msg = typeof c.message === "string"
-        ? c.message.trim().slice(0, MAX_MESSAGE_LEN)
-        : "";
-      return {
-        id: str(c.id, `chore${i}`),
-        name: str(c.name, `Chore ${i + 1}`),
-        icon: typeof c.icon === "string" ? c.icon : null,
-        binId: str(c.binId, bins[0]?.id ?? "bin0"),
-        kind: c.kind === "daily" ? ("daily" as const) : c.kind === "once" ? ("once" as const) : ("cycle" as const),
-        cycleDays,
-        greenMax: Math.min(num(c.greenMax, cycleDays), cycleDays),
-        yellowMax: Math.min(Math.max(num(c.yellowMax, cycleDays), num(c.greenMax, cycleDays)), cycleDays),
-        parts: Array.isArray(c.parts) ? (c.parts as unknown[]).filter((p): p is string => typeof p === "string") : undefined,
-        order: num(c.order, i),
-        assignees: Array.isArray(c.assignees)
-          ? (c.assignees as unknown[]).filter((a): a is string => typeof a === "string" && people.some((p) => p.id === a))
-          : [],
-        message: msg && !dangling ? msg : undefined,
-        messageFor: msgFor,
-      };
-    });
-}
-
-function parsePeriod(v: unknown, fb: string): PeriodLogV2 {
-  if (!isObj(v)) return emptyPeriod(fb);
-  const tallies: PeriodLogV2["tallies"] = {};
-  if (isObj(v.tallies)) {
-    for (const [pid, rec] of Object.entries(v.tallies)) {
-      if (!isObj(rec)) continue;
-      tallies[pid] = {};
-      for (const [cid, n] of Object.entries(rec)) {
-        if (typeof n === "number" && isFinite(n) && n > 0) tallies[pid][cid] = n;
-      }
-    }
-  }
-  return { period: str(v.period, fb), tallies };
-}
-
-function parseHistory(raw: unknown): PeriodLogV2[] {
-  if (!Array.isArray(raw)) return [];
-  return (raw as unknown[])
-    .map((h) => parsePeriod(h, "1970-01"))
-    .filter((h) => h.period !== "1970-01" || periodHasData(h));
-}
-
-function parseChoreState(raw: unknown): ChoreDayState[] {
-  if (!Array.isArray(raw)) return [];
-  return (raw as unknown[])
-    .filter(isObj)
-    .map((c) => ({
-      id: str(c.id, ""),
-      doneBy: isObj(c.doneBy)
-        ? Object.fromEntries(Object.entries(c.doneBy).map(([k, v]) => [k, !!v]))
-        : {},
-      lastDoneDate: typeof c.lastDoneDate === "string" ? c.lastDoneDate : null,
-      lastBy: typeof c.lastBy === "string" ? c.lastBy : null,
-      partsDone: Array.isArray(c.partsDone) ? (c.partsDone as unknown[]).map(Boolean) : [],
-    }));
-}
-
-// A space whose owner is no longer in the household is kept as it is: this
-// function repairs, it never discards someone's work. Deleting a person is
-// the explicit action that takes their space with them.
-function parseSpaces(raw: unknown, people: Person[]): Record<string, SpaceData> {
-  const spaces: Record<string, SpaceData> = {};
-  if (!isObj(raw)) return spaces;
-  for (const [ownerId, v] of Object.entries(raw)) {
-    if (!isObj(v)) continue;
-    const owner = people.find((p) => p.id === ownerId);
-    // No bins means nowhere to put a chore, so the board couldn't render —
-    // fall back to the personal template rather than dropping the space.
-    const parsed = parseBins(v.bins);
-    const bins = parsed.length > 0 ? parsed : PERSONAL_BINS.map((b) => ({ ...b }));
-    spaces[ownerId] = {
-      bins,
-      chores: parseChores(v.chores, owner ? [owner] : [], bins),
-      savedDate: str(v.savedDate, todayStr()),
-      choreState: parseChoreState(v.choreState),
-      weekly: parsePeriod(v.weekly, weekStartStr()),
-      monthly: parsePeriod(v.monthly, monthStr()),
-      history: parseHistory(v.history),
-    };
-  }
-  return spaces;
-}
-
 // Fill in anything missing or malformed so a corrupt blob can never crash
 // render. Unknown fields are dropped; wrong-typed fields get defaults.
 export function sanitize(raw: unknown): PersistedV2 | null {
-  if (!isObj(raw)) return null;
-  const d = raw;
-  const cfg = (isObj(d.config) ? d.config : {}) as Raw;
+  if (!raw || typeof raw !== "object") return null;
+  const d = raw as Record<string, unknown>;
+  const cfg = (d.config ?? {}) as Record<string, unknown>;
+
+  const str = (v: unknown, fb: string) => (typeof v === "string" ? v : fb);
+  const num = (v: unknown, fb: number) => (typeof v === "number" && isFinite(v) ? v : fb);
 
   const people: Person[] = Array.isArray(cfg.people)
     ? (cfg.people as unknown[])
-        .filter(isObj)
+        .filter((p): p is Record<string, unknown> => !!p && typeof p === "object")
         .map((p, i) => ({
           id: str(p.id, `person${i}`),
           name: str(p.name, `Person ${i + 1}`),
@@ -161,11 +40,57 @@ export function sanitize(raw: unknown): PersistedV2 | null {
         }))
     : [];
 
-  const bins = parseBins(cfg.bins);
-  const chores = parseChores(cfg.chores, people, bins);
+  const bins = Array.isArray(cfg.bins)
+    ? (cfg.bins as unknown[])
+        .filter((b): b is Record<string, unknown> => !!b && typeof b === "object")
+        .map((b, i) => ({
+          id: str(b.id, `bin${i}`),
+          num: str(b.num, String(i + 1).padStart(2, "0")),
+          label: str(b.label, `BIN ${i + 1}`),
+          order: num(b.order, i),
+          message: typeof b.message === "string" && b.message.trim() !== ""
+            ? b.message.trim().slice(0, MAX_MESSAGE_LEN)
+            : undefined,
+        }))
+    : [];
+
+  const chores: ChoreDefV2[] = Array.isArray(cfg.chores)
+    ? (cfg.chores as unknown[])
+        .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
+        .map((c, i) => {
+          const cycleDays = Math.max(1, num(c.cycleDays, 1));
+          // A message aimed at a deleted person takes the message with it —
+          // re-pointing it at "everyone" would show the wrong praise to all.
+          const wantsFor = typeof c.messageFor === "string" && c.messageFor !== "";
+          const msgFor = wantsFor && people.some((p) => p.id === c.messageFor)
+            ? (c.messageFor as string)
+            : undefined;
+          const dangling = wantsFor && !msgFor;
+          const msg = typeof c.message === "string"
+            ? c.message.trim().slice(0, MAX_MESSAGE_LEN)
+            : "";
+          return {
+            id: str(c.id, `chore${i}`),
+            name: str(c.name, `Chore ${i + 1}`),
+            icon: typeof c.icon === "string" ? c.icon : null,
+            binId: str(c.binId, bins[0]?.id ?? "bin0"),
+            kind: c.kind === "daily" ? ("daily" as const) : c.kind === "once" ? ("once" as const) : ("cycle" as const),
+            cycleDays,
+            greenMax: Math.min(num(c.greenMax, cycleDays), cycleDays),
+            yellowMax: Math.min(Math.max(num(c.yellowMax, cycleDays), num(c.greenMax, cycleDays)), cycleDays),
+            parts: Array.isArray(c.parts) ? (c.parts as unknown[]).filter((p): p is string => typeof p === "string") : undefined,
+            order: num(c.order, i),
+            assignees: Array.isArray(c.assignees)
+              ? (c.assignees as unknown[]).filter((a): a is string => typeof a === "string" && people.some((p) => p.id === a))
+              : [],
+            message: msg && !dangling ? msg : undefined,
+            messageFor: msgFor,
+          };
+        })
+    : [];
 
   if (people.length === 0 || bins.length === 0) return null;
-  const m = (isObj(cfg.messages) ? cfg.messages : {}) as Raw;
+  const m = (cfg.messages ?? {}) as Record<string, unknown>;
   // A blank title would render an empty banner line; treat it as "unset".
   // Sub-lines may stay blank — they're rendered conditionally.
   const strNE = (v: unknown, fb: string) => (typeof v === "string" && v.trim() !== "" ? v : fb);
@@ -175,7 +100,7 @@ export function sanitize(raw: unknown): PersistedV2 | null {
     praiseTitle: strNE(m.praiseTitle, DEFAULT_MESSAGES.praiseTitle),
     praiseSub: str(m.praiseSub, DEFAULT_MESSAGES.praiseSub),
   };
-  const sc = (isObj(cfg.scoring) ? cfg.scoring : {}) as Raw;
+  const sc = (cfg.scoring ?? {}) as Record<string, unknown>;
   // Earlier builds stored a boolean per kind; collapse those to the first
   // kind that was counting so the setting survives the shape change.
   const legacyKind: ChoreKind | null =
@@ -191,22 +116,56 @@ export function sanitize(raw: unknown): PersistedV2 | null {
     celebrateAt: Math.min(100, Math.max(1,
       Math.round(num(sc.celebrateAt, DEFAULT_SCORING.celebrateAt)))),
   };
-  const dp = (isObj(cfg.display) ? cfg.display : {}) as Raw;
+  const dp = (cfg.display ?? {}) as Record<string, unknown>;
   const display: DisplayConfig = {
     screensaverMin: Math.min(120, Math.max(0,
       Math.round(num(dp.screensaverMin, DEFAULT_DISPLAY.screensaverMin)))),
   };
   const config: HouseholdConfig = { people, bins, chores, messages, scoring, display };
 
+  const period = (v: unknown, fb: string): PeriodLogV2 => {
+    if (!v || typeof v !== "object") return emptyPeriod(fb);
+    const p = v as Record<string, unknown>;
+    const tallies: PeriodLogV2["tallies"] = {};
+    if (p.tallies && typeof p.tallies === "object") {
+      for (const [pid, rec] of Object.entries(p.tallies as Record<string, unknown>)) {
+        if (!rec || typeof rec !== "object") continue;
+        tallies[pid] = {};
+        for (const [cid, n] of Object.entries(rec as Record<string, unknown>)) {
+          if (typeof n === "number" && isFinite(n) && n > 0) tallies[pid][cid] = n;
+        }
+      }
+    }
+    return { period: str(p.period, fb), tallies };
+  };
+
+  const choreState: ChoreDayState[] = Array.isArray(d.choreState)
+    ? (d.choreState as unknown[])
+        .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
+        .map((c) => ({
+          id: str(c.id, ""),
+          doneBy:
+            c.doneBy && typeof c.doneBy === "object"
+              ? Object.fromEntries(
+                  Object.entries(c.doneBy as Record<string, unknown>).map(([k, v]) => [k, !!v])
+                )
+              : {},
+          lastDoneDate: typeof c.lastDoneDate === "string" ? c.lastDoneDate : null,
+          lastBy: typeof c.lastBy === "string" ? c.lastBy : null,
+          partsDone: Array.isArray(c.partsDone) ? (c.partsDone as unknown[]).map(Boolean) : [],
+        }))
+    : [];
+
   return {
     schemaVersion: 2,
     config,
     savedDate: str(d.savedDate, todayStr()),
-    choreState: parseChoreState(d.choreState),
-    weekly: parsePeriod(d.weekly, weekStartStr()),
-    monthly: parsePeriod(d.monthly, monthStr()),
-    history: parseHistory(d.history),
-    spaces: parseSpaces(d.spaces, people),
+    choreState,
+    weekly: period(d.weekly, weekStartStr()),
+    monthly: period(d.monthly, monthStr()),
+    history: Array.isArray(d.history)
+      ? (d.history as unknown[]).map((h) => period(h, "1970-01")).filter((h) => h.period !== "1970-01" || periodHasData(h))
+      : [],
   };
 }
 
