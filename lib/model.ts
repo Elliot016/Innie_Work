@@ -71,13 +71,20 @@ export const DEFAULT_SCORING: ScoringConfig = {
   celebrateAt: 100,
 };
 
-// Idle screensaver. 0 = never.
+// Idle screensaver. 0 = never. Quiet hours: while idle inside the window
+// the screen goes black and the wake lock is released so the iPad can sleep.
 export interface DisplayConfig {
   screensaverMin: number; // whole minutes, 0..120
+  quietOn: boolean;
+  quietFrom: string;      // "HH:MM", 24-hour
+  quietTo: string;        // "HH:MM"; a window may cross midnight
 }
 
 export const DEFAULT_DISPLAY: DisplayConfig = {
   screensaverMin: 3,
+  quietOn: true,
+  quietFrom: "23:00",
+  quietTo: "06:00",
 };
 
 export interface HouseholdConfig {

@@ -13,6 +13,8 @@ import {
 } from "@/lib/model";
 import {
   computeDaysAgo,
+  inWindow,
+  minuteOfDay,
   monthLabelOf,
   monthStr,
   todayStr,
@@ -59,6 +61,8 @@ export default function Home() {
   const [celebratePct, setCelebratePct] = useState(100);
   const celebrate = useCallback((pct: number) => { setCelebratePct(pct); setCelebrateShown(true); }, []);
   const [dayKey, setDayKey] = useState(() => todayStr());
+  // Wall-clock minute, for the quiet-hours window. Only read while idle.
+  const [clockMin, setClockMin] = useState(() => minuteOfDay());
   const pagesRef = useRef<HTMLDivElement>(null);
   // Where the board mounts its fixed overlay (flying letters + bin dock).
   const [flightRoot, setFlightRoot] = useState<HTMLDivElement | null>(null);
@@ -129,21 +133,32 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [loaded, dataAlert]);
 
-  // Tick once a minute; when the calendar day actually rolls over, update dayKey.
+  // Tick once a minute: advance the clock minute, and when the calendar day
+  // actually rolls over, update dayKey.
   useEffect(() => {
-    const id = setInterval(() => {
+    const tick = () => {
+      setClockMin(minuteOfDay());
       const d = todayStr();
       setDayKey((prev) => (prev === d ? prev : d));
-    }, 60000);
-    return () => clearInterval(id);
+    };
+    const id = setInterval(tick, 60000);
+    // iOS suspends timers in the background; catch up the moment we're back.
+    const onVis = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   // Idle screensaver + keep the wall panel awake. The saver never covers
   // onboarding or the celebration; those are dismissed first, and that tap
   // counts as activity.
   const { idle, wake, sleep } = useIdle(config.display.screensaverMin * 60_000);
-  useWakeLock(true);
   const saverShown = idle && loaded && !needsOnboarding && !celebrateShown;
+  // Quiet hours: idle inside the window means a black screen and no wake
+  // lock, so the iPad's own Auto-Lock can turn the display off. Any tap
+  // brings the board (and the lock) back until the next idle.
+  const { quietOn, quietFrom, quietTo } = config.display;
+  const quiet = saverShown && quietOn && inWindow(quietFrom, quietTo, clockMin);
+  useWakeLock(!quiet);
 
   // Latest monthly tally, readable from the rollover effect without re-running it.
   const monthlyRef = useRef(monthly);
@@ -462,7 +477,7 @@ export default function Home() {
       toast={celebrateShown || saverShown || needsOnboarding ? null : toasts[0] ?? null}
       onDismiss={dismissToast}
     />
-    <Screensaver show={saverShown} onDismiss={wake} />
+    <Screensaver show={saverShown} quiet={quiet} chores={chores} bins={config.bins} people={people} onDismiss={wake} />
 
 
     {/* ── FLIGHT LAYER slot: the board portals its flying letters + bins here ── */}

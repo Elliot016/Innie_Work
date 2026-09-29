@@ -2,6 +2,7 @@
 
 import { useRef, useState, type CSSProperties } from "react";
 import { sanitize, saveAll } from "@/lib/storage";
+import { hhmmLabel } from "@/lib/time";
 import {
   BACKUP_STALE_DAYS,
   currentRaw,
@@ -736,7 +737,8 @@ export default function SettingsPage({
 
       <div className="set-section">
         {secHead("display", "Display",
-          display.screensaverMin === 0 ? "SCREENSAVER OFF" : `SCREENSAVER · ${display.screensaverMin} MIN`)}
+          (display.screensaverMin === 0 ? "SCREENSAVER OFF" : `SCREENSAVER · ${display.screensaverMin} MIN`)
+          + (display.quietOn ? ` · QUIET ${hhmmLabel(display.quietFrom)}–${hhmmLabel(display.quietTo)}` : ""))}
         {openSecs.has("display") && (
         <div className="set-form" style={{ paddingTop: 6 }}>
           <label className="set-label">Screensaver after
@@ -753,6 +755,36 @@ export default function SettingsPage({
           <div className="set-hint">0 = never. Any tap wakes the board.</div>
           <div className="set-toggle">
             <button className="set-btn" onClick={onPreviewScreensaver}>[ PREVIEW ]</button>
+          </div>
+
+          <div className="set-toggle" style={{ marginTop: 10 }}>
+            <button
+              className={`set-btn${display.quietOn ? " sel" : ""}`}
+              onClick={() => setDisplay({ quietOn: !display.quietOn })}
+            >{display.quietOn ? "[ ✓ QUIET HOURS ]" : "[ QUIET HOURS ]"}</button>
+          </div>
+          {display.quietOn && (
+            <div className="set-numrow">
+              <label className="set-label">From
+                <input
+                  type="time" className="set-input time"
+                  value={display.quietFrom}
+                  onChange={(e) => { if (e.target.value) setDisplay({ quietFrom: e.target.value }); }}
+                />
+              </label>
+              <label className="set-label">To
+                <input
+                  type="time" className="set-input time"
+                  value={display.quietTo}
+                  onChange={(e) => { if (e.target.value) setDisplay({ quietTo: e.target.value }); }}
+                />
+              </label>
+            </div>
+          )}
+          <div className="set-hint">
+            While idle inside quiet hours the screen goes black and the app stops holding the display
+            awake, so the iPad&apos;s own Auto-Lock can switch it off. Set Auto-Lock to a few minutes for
+            that to save power — outside quiet hours the app keeps the panel on regardless.
           </div>
         </div>
         )}

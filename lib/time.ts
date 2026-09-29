@@ -52,3 +52,32 @@ export function freqLabel(cycleDays: number): string {
   if (cycleDays === 30 || cycleDays === 31) return "Monthly";
   return `Every ${cycleDays} days`;
 }
+
+// Minutes since midnight for an "HH:MM" string; null if malformed.
+export function hhmmToMinutes(v: string): number | null {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(v);
+  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+}
+
+// Whether `minuteOfDay` falls inside [from, to). A window whose end is
+// earlier than its start crosses midnight (23:00 → 06:00).
+export function inWindow(from: string, to: string, minuteOfDay: number): boolean {
+  const a = hhmmToMinutes(from);
+  const b = hhmmToMinutes(to);
+  if (a === null || b === null || a === b) return false;
+  return a < b ? minuteOfDay >= a && minuteOfDay < b : minuteOfDay >= a || minuteOfDay < b;
+}
+
+export function minuteOfDay(d = new Date()): number {
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+// "23:00" → "11 PM", "06:30" → "6:30 AM".
+export function hhmmLabel(v: string): string {
+  const mins = hhmmToMinutes(v);
+  if (mins === null) return v;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const h12 = h % 12 || 12;
+  return `${h12}${m ? ":" + String(m).padStart(2, "0") : ""} ${h < 12 ? "AM" : "PM"}`;
+}

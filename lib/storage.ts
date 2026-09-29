@@ -117,9 +117,14 @@ export function sanitize(raw: unknown): PersistedV2 | null {
       Math.round(num(sc.celebrateAt, DEFAULT_SCORING.celebrateAt)))),
   };
   const dp = (cfg.display ?? {}) as Record<string, unknown>;
+  const hhmm = (v: unknown, fb: string) =>
+    typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : fb;
   const display: DisplayConfig = {
     screensaverMin: Math.min(120, Math.max(0,
       Math.round(num(dp.screensaverMin, DEFAULT_DISPLAY.screensaverMin)))),
+    quietOn: typeof dp.quietOn === "boolean" ? dp.quietOn : DEFAULT_DISPLAY.quietOn,
+    quietFrom: hhmm(dp.quietFrom, DEFAULT_DISPLAY.quietFrom),
+    quietTo: hhmm(dp.quietTo, DEFAULT_DISPLAY.quietTo),
   };
   const config: HouseholdConfig = { people, bins, chores, messages, scoring, display };
 

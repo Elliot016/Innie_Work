@@ -739,6 +739,7 @@ body {
 }
 .set-input:focus { outline: none; border-color: var(--term-line); box-shadow: var(--term-glow); }
 .set-input.narrow { width: 72px; }
+.set-input.time { width: auto; min-width: 118px; color-scheme: dark; }
 
 .set-numrow { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
 .set-numrow .set-label { flex-direction: column; }
@@ -964,13 +965,18 @@ body {
   .board-grid { grid-template-columns: repeat(5, 1fr); }
 }
 
-/* ── SCREENSAVER (idle) ──
+/* ── SCREENSAVER (idle glance board) ──
    Above the CRT frame (80) and scanlines (85) so the bright fixed border is
    off the panel all night; below Onboarding (100) and the celebration (110), which it
    never renders over anyway. Must be a direct child of .clip-wrap — that
    element is position:fixed and so owns the stacking context all these
    z-indices are compared in. The overlay is fully opaque on purpose: the
-   board behind it is the burn-in risk. */
+   board behind it is the burn-in risk.
+
+   Deliberately still. Nothing here animates once it has faded in: the clock
+   redraws once a minute and the block jumps position every couple of
+   minutes (a transform with no transition). That's what keeps an iPad that
+   stays on all day from spending its battery on the idle screen. */
 .screensaver {
   position: fixed; inset: 0; z-index: 90;
   background: var(--term-bg);
@@ -987,104 +993,90 @@ body {
   position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px);
 }
-
-/* Own copy of the ambient digits, a notch dimmer than on the board. */
-.ss-digits { position: absolute; inset: 0; }
-.ss-digits .digit-field { position: absolute; }      /* fixed → absolute inside the overlay */
-.ss-digits .digit-field span { opacity: 0.045; }
-/* The board's own digits are hidden under the opaque saver — skip them. */
+/* Everything under the opaque saver is invisible, so stop drawing it: the
+   ambient digits and the red cards' pulse would otherwise run all night. */
 .clip-wrap:has(> .screensaver) > .digit-field { display: none; }
+.clip-wrap:has(> .screensaver) .task-card { animation: none; }
 
-/* Burn-in drift: two nested wrappers with unrelated periods trace a
-   Lissajous path (~60×30 px on an iPad) that never retraces exactly. */
-.ss-drift-x { position: absolute; inset: 0; animation: ss-drift-x 127s ease-in-out infinite alternate; }
-.ss-drift-y { position: absolute; inset: 0; animation: ss-drift-y 181s ease-in-out infinite alternate; }
-@keyframes ss-drift-x { from { transform: translateX(-2.5vw); } to { transform: translateX(2.5vw); } }
-@keyframes ss-drift-y { from { transform: translateY(-2vh);   } to { transform: translateY(2vh);   } }
+/* Quiet hours: nothing drawn at all. The fade-in is skipped too — going
+   dark should be instant, and there's nothing to fade. */
+.screensaver.quiet { background: #000; animation: none; }
+.screensaver.quiet::after { display: none; }
 
-.ss-center {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  padding-bottom: 10vh;                 /* leave the bottom for clock + name */
+.ss-block { position: absolute; inset: 0; }
+
+/* ── the list: what has aged past green, red first */
+.ss-list {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -55%);
+  width: min(720px, 88vw);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.ss-list-head {
+  font-size: clamp(0.6rem, 1.5vmin, 0.8rem);
+  letter-spacing: 0.3em; padding-left: 0.3em;
+  text-transform: uppercase;
+  color: var(--term-dim);
+  text-align: center;
+  margin-bottom: 6px;
+}
+.ss-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 16px;
+  padding: 10px 16px;
+  border: 1px solid color-mix(in srgb, var(--pc) 55%, transparent);
+  border-left: 5px solid var(--pc);
+  background: color-mix(in srgb, var(--pc) 9%, transparent);
+  color: var(--pc);
+}
+.ss-row.red    { --pc: var(--red); }
+.ss-row.yellow { --pc: var(--yellow); }
+.ss-row-bin {
+  font-family: var(--font-board);
+  font-size: clamp(0.55rem, 1.4vmin, 0.7rem); font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  opacity: 0.75;
+}
+.ss-row-name {
+  font-family: var(--font-board);
+  font-size: clamp(1.1rem, 3.2vmin, 1.7rem); font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  line-height: 1.15;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ss-row-since {
+  font-size: clamp(0.6rem, 1.6vmin, 0.85rem);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  opacity: 0.8; white-space: nowrap;
+}
+.ss-more {
+  text-align: center;
+  font-size: clamp(0.6rem, 1.5vmin, 0.8rem); letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--term-dim);
+}
+@media (max-width: 700px) {
+  .ss-row { grid-template-columns: 1fr auto; row-gap: 2px; }
+  .ss-row-bin { grid-column: 1 / -1; }
 }
 
-/* ── the house: masked divs, not <img>, so colour copies are a background change */
-.ss-logo {
-  --ss-logo: clamp(160px, 42vmin, 420px);
-  position: relative;
-  width: var(--ss-logo); aspect-ratio: 1;
-  perspective: 900px;
+/* ── all clear: the house, still, and two words */
+.ss-clear {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -60%);
+  display: flex; flex-direction: column; align-items: center; gap: 22px;
 }
-.ss-halo {
-  position: absolute; inset: -25%;
-  background: radial-gradient(closest-side, rgba(180, 220, 255, 0.09), transparent 72%);
-  pointer-events: none;
+.ss-logo-still {
+  width: clamp(120px, 28vmin, 260px); height: auto;
+  filter: invert(1) opacity(0.55) drop-shadow(0 0 6px rgba(180, 220, 255, 0.3));
 }
-.ss-spin {
-  position: absolute; inset: 0;
-  transform-style: preserve-3d;
-  animation: ss-spin 10s linear infinite;
-  will-change: transform;
-}
-@keyframes ss-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
-
-.ss-face, .ss-glitch, .ss-tear {
-  position: absolute; inset: 0;
-  -webkit-mask: url(/pp-atom.png) center / contain no-repeat;
-          mask: url(/pp-atom.png) center / contain no-repeat;
-}
-.ss-face {
-  background: rgba(232, 242, 248, 0.62);   /* phosphor white, held well under full */
-  backface-visibility: hidden; -webkit-backface-visibility: hidden;
-}
-.ss-face.back { transform: rotateY(180deg); } /* so the house never reads mirrored */
-
-/* Glitch layers: inert until .is-glitching lands on .ss-logo. They live INSIDE
-   .ss-spin so they inherit the current angle without knowing it. */
-.ss-glitch, .ss-tear { opacity: 0; pointer-events: none; }
-.ss-glitch.r { background: #ff2d55; }
-.ss-glitch.c { background: #19e6ff; }
-.ss-tear {
-  background: rgba(232, 242, 248, 0.62);
-  clip-path: inset(var(--tear-top, 40%) 0 var(--tear-bot, 48%) 0);
-}
-.ss-logo.is-glitching { animation: ss-flicker var(--glitch-ms, 420ms) steps(2, end) both; }
-.ss-logo.is-glitching .ss-glitch.r { animation: ss-split-r var(--glitch-ms, 420ms) steps(4, end) both; }
-.ss-logo.is-glitching .ss-glitch.c { animation: ss-split-c var(--glitch-ms, 420ms) steps(4, end) both; }
-.ss-logo.is-glitching .ss-tear     { animation: ss-tear    var(--glitch-ms, 420ms) steps(3, end) both; }
-/* Cut the band out of the front face so the tear reads as displacement, not a double. */
-.ss-logo.is-glitching .ss-face.front {
-  clip-path: polygon(
-    0 0, 100% 0, 100% var(--tear-top, 40%), 0 var(--tear-top, 40%),
-    0 calc(100% - var(--tear-bot, 48%)), 100% calc(100% - var(--tear-bot, 48%)),
-    100% 100%, 0 100%
-  );
-}
-@keyframes ss-flicker {
-  0%, 100% { opacity: 1; }
-  20%      { opacity: 0.55; }
-  45%      { opacity: 1; }
-  70%      { opacity: 0.7; }
-}
-@keyframes ss-split-r {
-  0%   { opacity: 0;    transform: translate(0, 0); }
-  10%  { opacity: 0.8;  transform: translate(-3%, 1%); }
-  50%  { opacity: 0.8;  transform: translate(2.5%, -1%); }
-  85%  { opacity: 0.8;  transform: translate(-1.5%, 0); }
-  100% { opacity: 0;    transform: translate(0, 0); }
-}
-@keyframes ss-split-c {
-  0%   { opacity: 0;    transform: translate(0, 0); }
-  10%  { opacity: 0.8;  transform: translate(3%, -1%); }
-  50%  { opacity: 0.8;  transform: translate(-2.5%, 1%); }
-  85%  { opacity: 0.8;  transform: translate(1.5%, 0); }
-  100% { opacity: 0;    transform: translate(0, 0); }
-}
-@keyframes ss-tear {
-  0%   { opacity: 0; transform: translateX(0); }
-  15%  { opacity: 1; transform: translateX(-8%); }
-  55%  { opacity: 1; transform: translateX(6%); }
-  100% { opacity: 0; transform: translateX(0); }
+.ss-clear-text {
+  font-family: var(--font-display), 'VT323', monospace;
+  font-size: clamp(1.6rem, 5vmin, 3rem);
+  letter-spacing: 0.2em; padding-left: 0.2em;
+  text-transform: uppercase;
+  color: rgba(232, 242, 248, 0.6);
 }
 
 /* ── bottom block: clock + name */
@@ -1111,9 +1103,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .screensaver, .ss-drift-x, .ss-drift-y, .ss-spin,
-  .ss-logo.is-glitching, .ss-glitch, .ss-tear, .ss-face.front { animation: none; clip-path: none; }
-  .ss-glitch, .ss-tear, .ss-face.back { display: none; }
+  .screensaver { animation: none; }
   .screensaver::after { display: none; }   /* mirrors the global scanline rule */
 }
 
