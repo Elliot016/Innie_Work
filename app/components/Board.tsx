@@ -28,7 +28,7 @@ import {
 import type { Toast } from "./ToastOverlay";
 
 // The chore board for one chore list: the cards, the letter-flight animation
-// into the bins, the bin dock with its gauges, and the momentary messages
+// into the bins, the bin dock they land in, and the momentary messages
 // (bin cleared, chore message, praise) plus the once-a-day celebration edge.
 //
 // It knows nothing about storage or which household it belongs to — the
@@ -117,6 +117,10 @@ export interface BoardProps {
   // The page-nav strip, rendered at the right of the legend.
   nav: ReactNode;
   flightRoot: HTMLElement | null;
+  // Which bin the board is showing. The first bin (by order) is home: it
+  // shows its own chores plus anything that needs attention elsewhere.
+  openBinId: string | null;
+  onOpenBin: (binId: string) => void;
   // A person logged (delta +1) or un-logged (delta -1) a chore: the parent
   // keeps the weekly/monthly tallies.
   onLog: (choreId: string, personId: string, delta: number) => void;
@@ -133,6 +137,8 @@ export default function Board({
   dayKey,
   nav,
   flightRoot,
+  openBinId,
+  onOpenBin,
   onLog,
   onToasts,
   onCelebrate,
@@ -163,12 +169,10 @@ export default function Board({
   const [returningNames, setReturningNames] = useState<Set<number>>(() => new Set());
   const [openBins, setOpenBins] = useState<Set<string>>(() => new Set());
   const [receivingBins, setReceivingBins] = useState<Set<string>>(() => new Set());
-  // Gauges held at their pre-log value while letters are in the air.
-  const [frozenPct, setFrozenPct] = useState<Map<string, number | null>>(() => new Map());
   const flightId = useRef(0);
   const nameRefs = useRef(new Map<number, HTMLDivElement>());
   const sinceRefs = useRef(new Map<number, HTMLDivElement>());
-  const binRefs = useRef(new Map<string, HTMLDivElement>());
+  const binRefs = useRef(new Map<string, HTMLElement>());
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const reducedMotion = useRef(false);
 
@@ -245,10 +249,6 @@ export default function Board({
     }
     if (pieces.length === 0) return;
     const id = ++flightId.current;
-    // Hold this bin's gauge at its pre-log value until the letters land.
-    const binDef = config.bins.find((bb) => bb.id === binId);
-    const held = binDef ? binPct(binDef, chores, people) : null;
-    setFrozenPct((m) => new Map(m).set(binId, held));
     setFlights((f) => [...f, { id, binId, color: person.color, pieces }]);
     setHiddenNames((s) => setToggle(s, i, true));
 
@@ -264,9 +264,8 @@ export default function Board({
       setFlights((f) => {
         const rest = f.filter((x) => x.id !== id);
         if (!rest.some((x) => x.binId === binId)) {
-          // Last letters for this bin just landed: release the gauge, flash
-          // the glow, and shut the doors.
-          setFrozenPct((m) => { const n = new Map(m); n.delete(binId); return n; });
+          // Last letters for this bin just landed: flash the glow and shut
+          // the doors.
           setReceivingBins((s) => new Set(s).add(binId));
           later(() => setReceivingBins((s) => { const n = new Set(s); n.delete(binId); return n; }), 600);
           later(() => setOpenBins((s) => { const n = new Set(s); n.delete(binId); return n; }), 250);
@@ -346,24 +345,42 @@ export default function Board({
     );
   }
 
-  // Overdue first, then aging, then everything else, with finished chores
-  // sinking to the bottom — the board reads as a to-do list. The original
-  // index rides along because handlers and refs are keyed on it.
+  // Dailies always lead, done or not, in their configured order. Then overdue,
+  // then aging, then everything else, with finished chores sinking to the
+  // bottom — the board reads as a to-do list. The original index rides along
+  // because handlers and refs are keyed on it.
   const rankOf = (c: ChoreState) => {
-    const isDone = c.def.kind === "daily" ? dailyDone(c, people) : c.done;
-    if (isDone) return 3;
+    if (c.def.kind === "daily") return 0;
+    if (c.done) return 4;
     const u = getUrgency(c);
-    return u === "red" ? 0 : u === "yellow" ? 1 : 2;
+    return u === "red" ? 1 : u === "yellow" ? 2 : 3;
   };
+  // ── Which bin is showing. Home is the first bin; a bin id that no longer
+  // exists (deleted in settings) falls back to home.
+  const sortedBins = [...config.bins].sort((a, b) => a.order - b.order);
+  const homeId = sortedBins[0]?.id ?? null;
+  const shownBinId = sortedBins.some((b) => b.id === openBinId) ? openBinId : homeId;
+  const atHome = shownBinId === homeId;
+  // Needs attention wherever it lives: aged into yellow/red, or a one-off
+  // that hasn't been done yet. These also show on the home bin.
+  const needsAttention = (c: ChoreState) =>
+    getUrgency(c) !== "green" || (c.def.kind === "once" && !c.done);
+  const onBoard = (c: ChoreState) =>
+    c.def.binId === shownBinId || (atHome && needsAttention(c));
+  // Per bin: how many chores inside it are yellow or red.
+  const alertCount = (binId: string) =>
+    chores.filter((c) => c.def.binId === binId && getUrgency(c) !== "green").length;
+
   const boardOrder = chores
     .map((c, i) => ({ c, i }))
+    .filter(({ c }) => onBoard(c))
     .sort((a, b) => rankOf(a.c) - rankOf(b.c) || a.i - b.i);
 
   // ── Progress
   const dailyChores = chores.filter((c) => c.def.kind === "daily");
-  const overall = overallPct(config.bins, chores, people, config.scoring) ?? 0;
+  const overall = overallPct(config.bins, chores, people) ?? 0;
   // Unrounded, so a 99.5% board can't trip a 100% threshold.
-  const exact = overallExactPct(config.bins, chores, people, config.scoring);
+  const exact = overallExactPct(config.bins, chores, people);
   const choreMsgs = activeChoreMessages(chores, people);
 
   // A bin's message fires the moment that bin goes clear. Same edge-detection
@@ -499,30 +516,27 @@ export default function Board({
         ))
       )}
       <div className="bin-dock">
-        {[...config.bins].sort((a, b) => a.order - b.order).map((b) => {
-          // `.has()` not `??` — null is now a meaningful frozen value.
-          const shown = frozenPct.has(b.id)
-            ? frozenPct.get(b.id)!
-            : binPct(b, chores, people);
+        {sortedBins.map((b) => {
+          const alerts = alertCount(b.id);
           return (
-            <div
+            <button
               key={b.id}
+              type="button"
               ref={(el) => { if (el) binRefs.current.set(b.id, el); else binRefs.current.delete(b.id); }}
-              className={`bin${openBins.has(b.id) ? " open" : ""}${receivingBins.has(b.id) ? " receiving" : ""}`}
+              className={`bin${openBins.has(b.id) ? " open" : ""}${receivingBins.has(b.id) ? " receiving" : ""}${b.id === shownBinId ? " selected" : ""}`}
+              onClick={() => onOpenBin(b.id)}
+              aria-pressed={b.id === shownBinId}
+              aria-label={`${b.label}${alerts ? `, ${alerts} need attention` : ""}`}
             >
               <div className="bin-lid">
                 <div className="bin-door bin-door-l" />
                 <div className="bin-door bin-door-r" />
               </div>
               <div className="bin-tag">
-                <span className="bin-num">{b.num}</span>
                 <span className="bin-cat">{b.label}</span>
+                {alerts > 0 && <span className="bin-alert">{alerts}</span>}
               </div>
-              <div className="bin-gauge">
-                <div className="bin-fill" style={{ width: `${shown ?? 0}%` }} />
-                <div className="bin-val">{shown === null ? "—" : `${shown}%`}</div>
-              </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -540,6 +554,11 @@ export default function Board({
           {nav}
         </div>
 
+        {boardOrder.length === 0 && (
+          <div className="board-empty">
+            {atHome ? "Nothing needs doing right now." : "No chores in this bin yet."}
+          </div>
+        )}
         <div className="board-grid">
           {boardOrder.map(({ c, i }) => {
             const urg = getUrgency(c);
@@ -596,7 +615,11 @@ export default function Board({
                   )}
                   <div className="card-top">
                     <div className={`card-name${nameClass(i)}`} ref={(el) => setNameRef(i, el)}>{c.def.name}</div>
-                    <div className={`card-since ${sinceClass(c, people)}${nameClass(i)}`} ref={(el) => setSinceRef(i, el)}>{sinceText(c, people)}</div>
+                    {/* A pending cycle chore's "N of M days" repeats the DAY N/M
+                        at the bottom of the card, so it's left off here. */}
+                    {!(c.def.kind === "cycle" && !c.done) && (
+                      <div className={`card-since ${sinceClass(c, people)}${nameClass(i)}`} ref={(el) => setSinceRef(i, el)}>{sinceText(c, people)}</div>
+                    )}
                   </div>
                   <div className="card-bottom">
                     <div className="cycle-day">

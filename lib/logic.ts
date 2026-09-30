@@ -8,7 +8,6 @@ import {
   MAX_HISTORY,
   PeriodLogV2,
   Person,
-  ScoringConfig,
   Urgency,
   periodTotal,
 } from "./model";
@@ -134,8 +133,9 @@ export function archiveMonth(done: PeriodLogV2, history: PeriodLogV2[]): PeriodL
 // person has logged it today). A cycle chore contributes one unit, done when
 // in good standing (not yet aging) — so 100% means "nothing needs doing".
 // Which kinds count at all is up to the household's scoring config.
-export function countsKind(scoring: ScoringConfig, kind: ChoreKind): boolean {
-  return scoring.countKind === kind;
+// The header percentage counts daily chores only.
+export function countsKind(kind: ChoreKind): boolean {
+  return kind === "daily";
 }
 
 // The unit maths for a single chore, shared by both readouts: a daily chore is
@@ -188,14 +188,14 @@ export function binPct(
 // The header, by contrast, counts only the chosen kind — across every chore
 // that lives in a bin.
 export function overallProgress(
-  bins: Bin[], chores: ChoreState[], people: Person[], scoring: ScoringConfig
+  bins: Bin[], chores: ChoreState[], people: Person[]
 ): { done: number; total: number } {
   const binIds = new Set(bins.map((b) => b.id));
   let done = 0;
   let total = 0;
   for (const c of chores) {
     if (!binIds.has(c.def.binId)) continue;
-    if (!countsKind(scoring, c.def.kind)) continue;
+    if (!countsKind(c.def.kind)) continue;
     const u = unitsOf(c, people);
     total += u.total;
     done += u.done;
@@ -204,18 +204,18 @@ export function overallProgress(
 }
 
 export function overallPct(
-  bins: Bin[], chores: ChoreState[], people: Person[], scoring: ScoringConfig
+  bins: Bin[], chores: ChoreState[], people: Person[]
 ): number | null {
-  const { done, total } = overallProgress(bins, chores, people, scoring);
+  const { done, total } = overallProgress(bins, chores, people);
   return pctOf(done, total);
 }
 
 // Unrounded 0..100 — what the celebration edge compares against, so a 99.5%
 // board never trips a 100% threshold.
 export function overallExactPct(
-  bins: Bin[], chores: ChoreState[], people: Person[], scoring: ScoringConfig
+  bins: Bin[], chores: ChoreState[], people: Person[]
 ): number | null {
-  const { done, total } = overallProgress(bins, chores, people, scoring);
+  const { done, total } = overallProgress(bins, chores, people);
   return total <= 0 ? null : (done / total) * 100;
 }
 

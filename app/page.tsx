@@ -49,6 +49,8 @@ export default function Home() {
   const [history, setHistory] = useState<PeriodLogV2[]>([]);
   const [viewMonth, setViewMonth] = useState<string>(() => monthStr());
   const [page, setPage] = useState(0);
+  // Which bin the board shows; null = home (the first bin).
+  const [openBinId, setOpenBinId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   // "stale" = no downloaded backup in a fortnight; "corrupt" = we found a
@@ -271,7 +273,7 @@ export default function Home() {
   }
 
   // The header percentage; the board computes the same number for itself.
-  const overall = overallPct(config.bins, chores, people, config.scoring) ?? 0;
+  const overall = overallPct(config.bins, chores, people) ?? 0;
 
   // ── Overview totals
   const personSum = (log: PeriodLogV2, personId: string) =>
@@ -296,11 +298,34 @@ export default function Home() {
   useEffect(() => {
     const el = pagesRef.current;
     if (!el) return;
+    // A page turn needs a deliberate swipe: long enough (the larger of 120px
+    // or a fifth of the screen), clearly sideways (at least twice as far
+    // across as up or down, so scrolling never turns the page), quick (under
+    // 600ms, so a slow drag doesn't count), and one finger only.
+    const MIN_PX = 120;
+    const MIN_FRACTION = 0.2;
+    const MAX_MS = 600;
     let startX = 0;
-    const onStart = (e: TouchEvent) => { startX = e.touches[0].clientX; };
+    let startY = 0;
+    let startT = 0;
+    let tracking = false;
+    const onStart = (e: TouchEvent) => {
+      tracking = e.touches.length === 1;
+      if (!tracking) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      startT = performance.now();
+    };
     const onEnd = (e: TouchEvent) => {
-      const diff = startX - e.changedTouches[0].clientX;
-      if (Math.abs(diff) < 30) return;
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches[0];
+      const diff = startX - t.clientX;
+      const dy = Math.abs(startY - t.clientY);
+      const minDist = Math.max(MIN_PX, window.innerWidth * MIN_FRACTION);
+      if (Math.abs(diff) < minDist) return;
+      if (Math.abs(diff) < dy * 2) return;
+      if (performance.now() - startT > MAX_MS) return;
       if (diff > 0) setPage(Math.min(2, pageRef.current + 1));
       if (diff < 0) setPage(Math.max(0, pageRef.current - 1));
     };
@@ -350,6 +375,8 @@ export default function Home() {
         dayKey={dayKey}
         nav={pageNav}
         flightRoot={flightRoot}
+        openBinId={openBinId}
+        onOpenBin={(id) => setOpenBinId(id)}
         onLog={bump}
         onToasts={pushToasts}
         onCelebrate={celebrate}
@@ -477,7 +504,7 @@ export default function Home() {
       toast={celebrateShown || saverShown || needsOnboarding ? null : toasts[0] ?? null}
       onDismiss={dismissToast}
     />
-    <Screensaver show={saverShown} quiet={quiet} chores={chores} bins={config.bins} people={people} onDismiss={wake} />
+    <Screensaver show={saverShown} quiet={quiet} chores={chores} people={people} onDismiss={() => { wake(); setOpenBinId(null); }} />
 
 
     {/* ── FLIGHT LAYER slot: the board portals its flying letters + bins here ── */}

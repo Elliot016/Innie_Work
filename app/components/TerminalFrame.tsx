@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// The CRT chrome: outer frame, scanline overlay, terminal header
-// (date | big % | HOME globe) and the footer hex string. Renders as fixed
-// overlays; the pages behind it pad to clear the header (--term-hdr-h) and
-// the bin dock.
+// The CRT chrome: outer frame, scanline overlay and the terminal header
+// (date | big %). Renders as fixed overlays; the pages behind it pad to clear
+// the header and the bin dock.
 export default function TerminalFrame({
   dateStr,
   pct,
@@ -44,11 +43,8 @@ export default function TerminalFrame({
       <header className="term-hdr">
         <div className="term-date">{dateStr}</div>
         <div className="term-pct">{shown}% COMPLETE</div>
-        <div className="term-logo" aria-hidden>
-          {/* The house atom logo */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/pp-atom.png" alt="" className="term-logo-img" />
-        </div>
+        {/* Same width as the date so the percentage stays centred. */}
+        <div className="term-spacer" aria-hidden />
       </header>
     </>
   );

@@ -23,19 +23,12 @@ import {
   HouseholdConfig,
   MAX_MESSAGE_LEN,
   Person,
-  ChoreKind,
   ScoringConfig,
 } from "@/lib/model";
 
 type Mutate = (mutate: (cfg: HouseholdConfig) => HouseholdConfig) => void;
 
 const pc = (color: string) => ({ "--pc": color } as CSSProperties);
-
-const KIND_OPTIONS: { k: ChoreKind; label: string }[] = [
-  { k: "daily", label: "DAILY" },
-  { k: "cycle", label: "CYCLE" },
-  { k: "once", label: "ONCE" },
-];
 
 function newId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -667,21 +660,10 @@ export default function SettingsPage({
       </div>
 
       <div className="set-section">
-        {secHead("scoring", "Scoring", `${scoring.countKind.toUpperCase()} · ${scoring.celebrateAt}%`)}
+        {secHead("scoring", "Scoring", `CELEBRATE AT ${scoring.celebrateAt}%`)}
         {openSecs.has("scoring") && (
         <div className="set-form" style={{ paddingTop: 6 }}>
-          <div className="set-label">Counts toward the percentage
-            <div className="set-toggle">
-              {KIND_OPTIONS.map(({ k, label }) => (
-                <button
-                  key={k}
-                  className={`set-btn${scoring.countKind === k ? " sel" : ""}`}
-                  onClick={() => setScoring({ countKind: k })}
-                >{label}</button>
-              ))}
-            </div>
-          </div>
-          <div className="set-hint">Drives the top percentage only. Each bin always shows its own progress.</div>
+          <div className="set-hint">The top percentage counts daily chores.</div>
           <label className="set-label">Celebrate at
             <input
               type="number" min={1} max={100}

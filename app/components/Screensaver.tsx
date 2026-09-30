@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { Bin, ChoreState } from "@/lib/model";
+import { ChoreState } from "@/lib/model";
 import { getUrgency, sinceText } from "@/lib/logic";
 import type { Person } from "@/lib/model";
 
@@ -71,7 +71,6 @@ export default function Screensaver({
   show,
   quiet,
   chores,
-  bins,
   people,
   onDismiss,
 }: {
@@ -80,7 +79,6 @@ export default function Screensaver({
   // the iPad can switch the display off.
   quiet: boolean;
   chores: ChoreState[];
-  bins: Bin[];
   people: Person[];
   onDismiss: () => void;
 }) {
@@ -97,7 +95,6 @@ export default function Screensaver({
     .sort((a, b) => rank[a.u] - rank[b.u] || b.c.daysAgo - a.c.daysAgo);
   const shown = due.slice(0, MAX_ROWS);
   const more = due.length - shown.length;
-  const binOf = (id: string) => bins.find((b) => b.id === id);
 
   return (
     <div className="screensaver" onClick={onDismiss} role="button" aria-label="Wake">
@@ -110,14 +107,14 @@ export default function Screensaver({
           </div>
         ) : (
           <div className="ss-list">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/pp-atom.png" alt="" className="ss-logo-still small" aria-hidden />
             <div className="ss-list-head">
               {due.length === 1 ? "1 chore needs attention" : `${due.length} chores need attention`}
             </div>
             {shown.map(({ c, u }) => {
-              const b = binOf(c.def.binId);
               return (
                 <div key={c.def.id} className={`ss-row ${u}`}>
-                  <span className="ss-row-bin">{b ? `${b.num} ${b.label}` : ""}</span>
                   <span className="ss-row-name">{c.def.name}</span>
                   <span className="ss-row-since">{sinceText(c, people)}</span>
                 </div>

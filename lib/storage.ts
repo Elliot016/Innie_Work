@@ -2,7 +2,6 @@ import {
   CelebrationMessages,
   ChoreDayState,
   ChoreDefV2,
-  ChoreKind,
   DEFAULT_DISPLAY,
   DEFAULT_MESSAGES,
   DEFAULT_SCORING,
@@ -101,18 +100,9 @@ export function sanitize(raw: unknown): PersistedV2 | null {
     praiseSub: str(m.praiseSub, DEFAULT_MESSAGES.praiseSub),
   };
   const sc = (cfg.scoring ?? {}) as Record<string, unknown>;
-  // Earlier builds stored a boolean per kind; collapse those to the first
-  // kind that was counting so the setting survives the shape change.
-  const legacyKind: ChoreKind | null =
-    sc.daily === true ? "daily" : sc.cycle === true ? "cycle" : sc.once === true ? "once" : null;
-  const rawKind = sc.countKind;
-  // "all" is no longer a valid choice; boards holding it fall back to the default.
-  const countKind: ChoreKind =
-    rawKind === "daily" || rawKind === "cycle" || rawKind === "once"
-      ? rawKind
-      : legacyKind ?? DEFAULT_SCORING.countKind;
+  // Earlier builds also stored which chore kind the percentage counted; the
+  // header now always counts dailies, so that field is simply dropped.
   const scoring: ScoringConfig = {
-    countKind,
     celebrateAt: Math.min(100, Math.max(1,
       Math.round(num(sc.celebrateAt, DEFAULT_SCORING.celebrateAt)))),
   };

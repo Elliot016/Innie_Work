@@ -117,8 +117,7 @@ body {
   white-space: nowrap;
 }
 
-.term-logo { width: 96px; display: flex; justify-content: flex-end; color: var(--term-fg); }
-.term-logo svg { height: 30px; }
+.term-spacer { width: 96px; }
 
 /* ── AMBIENT DIGITS ── */
 .digit-field {
@@ -302,10 +301,13 @@ body {
   50%      { background: var(--red); }
 }
 
-.card-top { position: relative; z-index: 1; padding-left: 2px; padding-top: 2px; }
+.card-top { position: relative; z-index: 1; padding-top: 2px; text-align: center; }
 .card-name {
   font-family: var(--font-board);
-  font-size: 0.95rem; font-weight: 700; line-height: 1.15;
+  font-size: 1.05rem; font-weight: 700; line-height: 1.15;
+  /* Plex Mono tops out at 700; a hairline stroke in the text colour reads
+     heavier from across the room without changing the face. */
+  -webkit-text-stroke: 0.4px currentColor;
   letter-spacing: 0.03em; text-transform: uppercase;
   /* A 6px bloom that suited thin VT323 turns to mush on a bold face. */
   text-shadow: 0 0 4px rgba(180, 220, 255, 0.28);
@@ -355,14 +357,22 @@ body {
 }
 .card-check { font-size: 0.85rem; text-shadow: var(--term-glow); }
 
-.cycle-day { display: flex; align-items: center; }
+/* The day count sits dead centre of the card's bottom edge, whatever is
+   to its left or right. */
+.cycle-day {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center;
+}
 .day-count {
   font-family: var(--font-board);
-  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+  font-size: 0.88rem; font-weight: 700; letter-spacing: 0.06em;
+  -webkit-text-stroke: 0.3px currentColor;
   color: var(--card-sub);
+  white-space: nowrap;
 }
 
 .who-status {
+  margin-left: auto;   /* stays right now the day count is centred out of flow */
   font-size: 0.55rem; font-weight: 600; color: var(--term-dim);
   text-align: right; line-height: 1.5;
   letter-spacing: 0.06em; text-transform: uppercase;
@@ -375,7 +385,7 @@ body {
   border-radius: inherit;
   pointer-events: none;
   background-size: 30%;
-  background-position: center bottom 10px;
+  background-position: center;
   background-repeat: no-repeat;
   filter: invert(1);
   mix-blend-mode: screen;
@@ -581,7 +591,40 @@ body {
   bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
   display: flex; justify-content: center; gap: 12px;
 }
-.bin { position: relative; flex: 1 1 0; min-width: 130px; max-width: 260px; }
+.bin {
+  position: relative; flex: 1 1 0; min-width: 130px; max-width: 260px;
+  /* A button, but it should look exactly like the box it was. */
+  background: none; border: none; padding: 0; margin: 0; color: inherit; font: inherit;
+  text-align: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+}
+/* The dock sits in the pointer-transparent flight layer; only the bins take taps,
+   and not while the board page is swiped away. */
+.flight-layer.flight-hidden .bin { pointer-events: none; }
+/* The bin the board is showing. */
+.bin.selected .bin-tag {
+  border-color: var(--term-fg);
+  background: color-mix(in srgb, var(--term-fg) 14%, var(--term-screen));
+  box-shadow: var(--term-glow);
+}
+.bin.selected .bin-door { border-color: var(--term-fg); }
+.bin:active .bin-tag { background: color-mix(in srgb, var(--term-fg) 20%, var(--term-screen)); }
+/* How many chores inside this bin are yellow or red. */
+.bin-alert {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px;
+  background: var(--red); color: var(--term-bg);
+  font-family: var(--font-board); font-size: 0.6rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.bin-tag { position: relative; }
+/* Shown when the open bin has nothing to list. */
+.board-empty {
+  padding: 60px 20px; text-align: center;
+  font-size: 0.72rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--term-dim);
+}
 @media (max-width: 700px) {
   .bin-dock { flex-wrap: wrap; gap: 8px; }
   .bin { flex: 1 1 40%; max-width: none; }
@@ -599,32 +642,18 @@ body {
 .bin-door-r { transform-origin: right bottom; border-left-width: 0.5px; }
 .bin.open .bin-door-l { transform: rotate(-55deg); }
 .bin.open .bin-door-r { transform: rotate(55deg); }
+/* The box itself: just the label, centred. No number, no gauge — the header
+   percentage is the only progress readout, and it counts dailies. */
 .bin-tag {
-  border: 1px solid var(--term-line); border-bottom: none; background: var(--term-screen);
-  padding: 4px 8px 2px;
-  display: flex; justify-content: space-between; align-items: baseline;
-}
-.bin-num {
-  font-family: var(--font-board);
-  font-size: 0.72rem; font-weight: 700;
-  text-shadow: 0 0 4px rgba(180, 220, 255, 0.28);
-}
-.bin-cat { font-size: 0.52rem; letter-spacing: 0.14em; color: var(--term-dim); }
-.bin-gauge {
-  position: relative; height: 16px;
   border: 1px solid var(--term-line); background: var(--term-screen);
+  padding: 7px 10px 6px;
+  display: flex; justify-content: center; align-items: baseline;
 }
-.bin-fill {
-  position: absolute; inset: 1px auto 1px 1px; width: 0%;
-  background: var(--term-line);
-  opacity: 0.85;
-  transition: width 0.5s cubic-bezier(0.3, 0.9, 0.3, 1);
-}
-.bin-val {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; padding-left: 6px;
-  font-size: 0.55rem; letter-spacing: 0.08em;
-  mix-blend-mode: difference;
+.bin-cat {
+  font-family: var(--font-board);
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em;
+  color: var(--term-fg);
+  text-shadow: 0 0 4px rgba(180, 220, 255, 0.28);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -647,15 +676,28 @@ body {
   .legend { flex: none; padding: 8px 22px 4px; }
   .bottom-pad { flex: none; height: 8px; }
 
+  /* Cards are a fixed, short height and the set sits centred in the space
+     between the legend and the bin dock — horizontally too, so a bin with
+     only two or three chores reads as a tidy group rather than a stretched
+     row. Flex rather than grid so a part-filled last row centres as well. */
   .board-grid {
     flex: 1 1 auto;
-    grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: minmax(96px, 1fr);
+    display: flex; flex-wrap: wrap;
+    justify-content: center; align-content: center;
     gap: 16px;
     padding: 14px 22px 0;
+    /* Rows of four: the grid is only ever wide enough for four cards and
+       the gaps between them, and sits centred on the page. */
+    --card-w: clamp(190px, 14vw, 250px);
+    width: 100%;
+    max-width: calc(4 * var(--card-w) + 3 * 16px + 44px);
+    margin-inline: auto;
   }
+  /* Near-square cards: a set width that grows a little with the screen, and
+     a 5:4 shape. */
+  .board-grid > .card-wrap { flex: 0 0 var(--card-w); min-width: 0; }
 
-  .task-card { min-height: 96px; height: 100%; padding: 14px 14px 12px; }
+  .task-card { min-height: 0; height: auto; aspect-ratio: 5 / 4; padding: 12px 14px 10px; }
 
   /* Overview: scorecards beside the by-chore table so it fits without scrolling */
   .ov-body {
@@ -885,12 +927,6 @@ body {
 }
 .set-btn.done:active { background: color-mix(in srgb, var(--green) 25%, transparent); }
 
-/* Header logo: the house atom, inverted to phosphor white on navy */
-.term-logo-img {
-  height: 38px;
-  width: auto;
-  filter: invert(1) drop-shadow(0 0 4px rgba(180, 220, 255, 0.45));
-}
 
 /* Collapsible section headers on the Manage page */
 .set-sec-head {
@@ -1022,7 +1058,7 @@ body {
 }
 .ss-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: baseline;
   gap: 16px;
   padding: 10px 16px;
@@ -1033,12 +1069,6 @@ body {
 }
 .ss-row.red    { --pc: var(--red); }
 .ss-row.yellow { --pc: var(--yellow); }
-.ss-row-bin {
-  font-family: var(--font-board);
-  font-size: clamp(0.55rem, 1.4vmin, 0.7rem); font-weight: 700;
-  letter-spacing: 0.14em; text-transform: uppercase;
-  opacity: 0.75;
-}
 .ss-row-name {
   font-family: var(--font-board);
   font-size: clamp(1.1rem, 3.2vmin, 1.7rem); font-weight: 700;
@@ -1056,10 +1086,6 @@ body {
   font-size: clamp(0.6rem, 1.5vmin, 0.8rem); letter-spacing: 0.2em; text-transform: uppercase;
   color: var(--term-dim);
 }
-@media (max-width: 700px) {
-  .ss-row { grid-template-columns: 1fr auto; row-gap: 2px; }
-  .ss-row-bin { grid-column: 1 / -1; }
-}
 
 /* ── all clear: the house, still, and two words */
 .ss-clear {
@@ -1071,6 +1097,8 @@ body {
   width: clamp(120px, 28vmin, 260px); height: auto;
   filter: invert(1) opacity(0.55) drop-shadow(0 0 6px rgba(180, 220, 255, 0.3));
 }
+/* Above the attention list: smaller, and a touch dimmer than the rows. */
+.ss-list .ss-logo-still.small { width: clamp(56px, 11vmin, 100px); align-self: center; margin-bottom: 4px; opacity: 0.85; }
 .ss-clear-text {
   font-family: var(--font-display), 'VT323', monospace;
   font-size: clamp(1.6rem, 5vmin, 3rem);

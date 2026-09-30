@@ -59,15 +59,13 @@ export const DEFAULT_MESSAGES: CelebrationMessages = {
   praiseSub: "You have completed your tasks.",
 };
 
-// Which chore kind drives the header percentage and the celebration edge.
-// Bin gauges deliberately ignore this — each bin always counts its own chores.
+// The header percentage counts daily chores only; this is the threshold the
+// once-a-day celebration fires at.
 export interface ScoringConfig {
-  countKind: ChoreKind;
   celebrateAt: number; // whole percent, 1..100
 }
 
 export const DEFAULT_SCORING: ScoringConfig = {
-  countKind: "daily",
   celebrateAt: 100,
 };
 
